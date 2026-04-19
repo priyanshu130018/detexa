@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+
+# Environment
+.env
+*.env
+
+# Models (large binaries – use DVC or cloud storage in production)
+ml/models/saved/*.pkl
+ml/models/saved/*.joblib
+data/
+*.csv
+
+# Logs
+logs/*.log
+logs/*.log.*
+
+# DB
+*.db
+*.sqlite3
+test.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Streamlit
+.streamlit/
+
+# Alembic
+alembic/versions/*.py
