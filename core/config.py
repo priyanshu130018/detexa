@@ -7,7 +7,7 @@ environment (or .env file) automatically.
 
 from functools import lru_cache
 from typing import List
-
+import os
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -31,10 +31,10 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 60
 
     # ── Database ─────────────────────────────────────────────────────────────
-    database_url: str = DATABASE_URL
+    database_url: str = os.getenv("DATABASE_URL")
 
     # ── Redis ─────────────────────────────────────────────────────────────────
-    redis_url: str = REDIS_URL
+    redis_url: str = os.getenv("REDIS_URL")
 
     # ── API ──────────────────────────────────────────────────────────────────
     api_host: str = "0.0.0.0"
