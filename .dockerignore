@@ -1,13 +1,53 @@
-node_modules
+# Git
 .git
 .gitignore
-__pycache__
-*.pyc
-venv
-.venv
-logs
-dist
-build
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+
+# Environment
 .env
-ml/models
+*.env
+
+# Logs
+logs/
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Streamlit
+.streamlit/
+
+# Jupyter
 *.ipynb
+
+# Node
+node_modules/
+
+# Test caches
+.pytest_cache/
+.mypy_cache/
+
+# Model artifacts (generated)
+ml/models/saved/
+
+# Datasets
+data/
+*.csv

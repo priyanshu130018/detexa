@@ -129,7 +129,7 @@ Open:
 ### 3 – Docker Compose (full stack)
 
 ```bash
-docker-compose up --build
+docker compose up --build
 ```
 
 Services started:

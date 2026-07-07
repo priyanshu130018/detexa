@@ -53,11 +53,8 @@ services:
       - ./ml/models/saved:/app/ml/models/saved
       - ./logs:/app/logs
     command: >
-      sh -c "
-        python scripts/train_models.py &&
-        uvicorn api.main:app --host 0.0.0.0 --port 8000 --workers 2
-      "
-    restart: unless-stopped
+      uvicorn api.main:app --host 0.0.0.0 --port 8000 --workers 2
+
 
   # ── Streamlit dashboard ────────────────────────────────────────────────────
   dashboard:
