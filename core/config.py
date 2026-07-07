@@ -31,10 +31,10 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 60
 
     # ── Database ─────────────────────────────────────────────────────────────
-    database_url: str = "postgresql://detexa_user:detexa_pass@localhost:5432/detexa_db"
+    database_url: str = DATABASE_URL
 
     # ── Redis ─────────────────────────────────────────────────────────────────
-    redis_url: str = "redis://localhost:6379/0"
+    redis_url: str = REDIS_URL
 
     # ── API ──────────────────────────────────────────────────────────────────
     api_host: str = "0.0.0.0"

@@ -45,7 +45,7 @@ detexa/
 ├── dashboard/                  # Streamlit frontend
 │   ├── app.py                  # Entry point – auth gate + sidebar nav
 │   ├── api_client.py           # HTTP client for backend calls
-│   └── pages/
+│   └── views/
 │       ├── login.py            # Login / Register UI
 │       ├── overview.py         # Main dashboard – KPIs, daily/monthly charts
 │       ├── transactions.py     # Filterable transaction table
@@ -90,7 +90,8 @@ cd detexa
 
 # Create virtual environment
 python -m venv .venv
-source .venv/bin/activate          # Windows: .venv\Scripts\activate
+source .venv/bin/activate          
+# Windows: .venv\Scripts\activate
 
 # Install dependencies
 pip install -r requirements.txt

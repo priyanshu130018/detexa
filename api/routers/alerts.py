@@ -20,7 +20,6 @@ from services.alert_service import AlertService
 
 router = APIRouter(prefix="/alerts", tags=["Alerts"])
 
-
 @router.get("", response_model=List[AlertOut])
 def list_alerts(
     limit: int = Query(100, le=500),

@@ -182,7 +182,7 @@ def seed(db: Session, n_users: int = 10, n_txns: int = 500):
             db.add(alert)
 
     db.commit()
-    print("✓ Seed data inserted successfully")
+    print("[SUCCESS] Seed data inserted successfully")
     print(f"  Admin login: admin@detexa.io / Admin@1234")
 
 
