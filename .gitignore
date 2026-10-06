@@ -44,3 +44,7 @@ Thumbs.db
 
 # Alembic
 alembic/versions/*.py
+.neon
+node_modules/
+
+
