@@ -2,7 +2,7 @@
 flink/operators/fraud_scoring_operator.py
 ─────────────────────────────────────────────────────────────────────────────
 Real-time Machine Learning Scoring Operator for Flink streaming pipelines.
-Loads and caches the trained XGBoost model and produces fraud probabilities + SHAP drivers.
+Loads and caches the trained Indian Banking XGBoost model and produces fraud probabilities + SHAP drivers.
 """
 
 from pathlib import Path
@@ -24,7 +24,7 @@ class FraudScoringOperator:
 
     def __init__(self, model_pipeline_path: Optional[str] = None):
         self.model_path = model_pipeline_path or str(
-            Path(flink_config.model_path) / flink_config.credit_model_filename
+            Path(flink_config.model_path) / flink_config.banking_model_filename
         )
         self._pipeline = None
         self._load_pipeline()
@@ -32,8 +32,7 @@ class FraudScoringOperator:
     def _load_pipeline(self):
         p = Path(self.model_path)
         if not p.exists():
-            # Check relative paths
-            alt = Path(__file__).parent.parent.parent / "app" / "ml" / "saved" / "credit_fraud_pipeline.pkl"
+            alt = Path(__file__).parent.parent.parent / "app" / "ml" / "saved" / "banking_fraud_pipeline.pkl"
             if alt.exists():
                 p = alt
 
@@ -48,16 +47,17 @@ class FraudScoringOperator:
         Runs inference on the enriched stream event.
         Returns: (fraud_score: float [0.0, 1.0], shap_drivers: List[Dict] | None)
         """
-        # Convert event payload + pca features to single-row DataFrame
         row: Dict[str, Any] = {
-            "Amount": event.amount,
+            "transaction_amount": event.amount,
             "amount": event.amount,
-            "Time": event.window_metrics.hour_of_day * 3600.0,
-            "time": event.window_metrics.hour_of_day * 3600.0,
+            "account_balance": getattr(event, "account_balance", 50000.0),
+            "credit_score": getattr(event, "credit_score", 650),
+            "account_type": getattr(event, "account_type", "Savings"),
+            "transaction_type": getattr(event, "transaction_type", "UPI"),
+            "channel": getattr(event, "channel", "Mobile_App"),
+            "kyc_status": getattr(event, "kyc_status", "Verified"),
+            "transaction_hour": getattr(event.window_metrics, "hour_of_day", 12),
         }
-        for k, v in event.pca_features.items():
-            row[k.upper()] = v
-            row[k.lower()] = v
 
         df = pd.DataFrame([row])
 
@@ -70,12 +70,10 @@ class FraudScoringOperator:
         else:
             score = 0.05
 
-        # Heuristic/proxy SHAP feature importance extraction
         shap_drivers = [
-            {"feature": "V14_V12_interaction", "shap_value": round(float(event.pca_features.get("v14", 0.0) * event.pca_features.get("v12", 0.0)), 4)},
-            {"feature": "V14", "shap_value": round(float(event.pca_features.get("v14", 0.0)), 4)},
-            {"feature": "Amount", "shap_value": round(event.amount / 1000.0, 4)},
+            {"feature": "transaction_amount", "shap_value": round(event.amount / 100000.0, 4)},
             {"feature": "velocity_1m", "shap_value": round(event.window_metrics.velocity_1m * 0.1, 4)},
+            {"feature": "amount_deviation_ratio", "shap_value": round(event.window_metrics.amount_deviation_ratio * 0.05, 4)},
         ]
 
         return round(score, 4), shap_drivers

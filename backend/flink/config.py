@@ -1,8 +1,7 @@
 """
 flink/config.py
 ─────────────────────────────────────────────────────────────────────────────
-PyFlink Streaming Environment Configuration.
-Independent from FastAPI; reads settings from environment or defaults.
+PyFlink Streaming Environment Configuration for Indian Banking Fraud System.
 """
 
 import os
@@ -28,7 +27,8 @@ class FlinkStreamingConfig:
 
     # ── ML Model Configuration ───────────────────────────────────────────────
     model_path: str = os.getenv("MODEL_PATH", "app/ml/saved")
-    credit_model_filename: str = os.getenv("CREDIT_MODEL_FILENAME", "credit_fraud_pipeline.pkl")
+    banking_model_filename: str = os.getenv("BANKING_MODEL_FILENAME", "banking_fraud_pipeline.pkl")
+    credit_model_filename: str = os.getenv("CREDIT_MODEL_FILENAME", "banking_fraud_pipeline.pkl")
     fraud_threshold: float = float(os.getenv("FRAUD_THRESHOLD", "0.50"))
     high_risk_threshold: float = float(os.getenv("HIGH_RISK_THRESHOLD", "0.75"))
 

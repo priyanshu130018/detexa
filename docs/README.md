@@ -173,21 +173,21 @@ Access Web Interfaces:
 
 ---
 
-## 📊 Dataset & Kaggle Setup
+## 📊 Dataset Setup
 
-Detexa uses credit card and transaction anomaly datasets (such as `indian_banking_transactions.csv`). 
+Detexa uses the Indian banking transaction fraud dataset: `indian_banking_transactions.csv`.
 
 > **Important:** The dataset files are excluded from version control via `.gitignore`.
 
 To use the dataset for local model training or bulk ingestion:
 1. Download the banking transaction dataset from Kaggle.
-2. Create directory `data/raw/` if it does not exist:
+2. Create directory `backend/data/raw/` if it does not exist:
    ```bash
-   mkdir -p data/raw
+   mkdir -p backend/data/raw
    ```
 3. Place the CSV file at:
    ```text
-   data/raw/indian_banking_transactions.csv
+   backend/data/raw/indian_banking_transactions.csv
    ```
 4. Run the training or ingestion scripts detailed in [`docs/DEVELOPMENT.md`](DEVELOPMENT.md).
 

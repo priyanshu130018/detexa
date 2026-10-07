@@ -13,7 +13,7 @@ import redis
 from neo4j import GraphDatabase
 from kafka import KafkaProducer, KafkaConsumer
 from app.core.config import settings
-from app.ml.models.credit_fraud_model import CreditFraudModel
+from app.ml.models.banking_fraud_model import BankingFraudModel
 from app.decision import get_decision_engine, DecisionContext, DecisionAction
 from app.streaming.flink_processor import SlidingWindowState
 from app.core.realtime_broadcaster import get_realtime_broadcaster
@@ -44,26 +44,34 @@ class TestRealtimeE2EPipeline:
         cls.bootstrap = bootstrap
 
         cls.window_state = SlidingWindowState()
-        cls.credit_model = CreditFraudModel.get_instance()
+        cls.banking_model = BankingFraudModel.get_instance()
         cls.decision_engine = get_decision_engine()
 
     def test_e2e_trace_1_low_risk_allow_flow(self):
-        user_id = f"usr-e2e-{uuid.uuid4().hex[:6]}"
+        customer_id = f"CUST-E2E-{uuid.uuid4().hex[:6]}"
+        user_id = customer_id
         device_id = f"dev-e2e-{uuid.uuid4().hex[:6]}"
         ip_addr = "192.168.1.100"
-        amount = 49.99
+        amount = 499.0
 
         # Step 1: Ingest transaction via Kafka
         topic = "detexa.transactions.raw"
         txn_event = {
             "transaction_id": str(uuid.uuid4()),
+            "customer_id": customer_id,
             "user_id": user_id,
             "device_id": device_id,
             "ip_address": ip_addr,
+            "transaction_amount": amount,
             "amount": amount,
-            "currency": "USD",
-            "merchant": "Everyday Market",
-            "v1": -0.1, "v2": 0.2, "v3": -0.05,
+            "currency": "INR",
+            "merchant": "Blinkit India",
+            "account_balance": 50000.0,
+            "account_type": "Savings",
+            "transaction_type": "UPI",
+            "channel": "Mobile Banking",
+            "kyc_status": "Verified",
+            "credit_score": 750,
             "timestamp": time.time(),
         }
         self.producer.send(topic, txn_event)
@@ -71,15 +79,15 @@ class TestRealtimeE2EPipeline:
 
         # Step 2: Flink stream window state aggregation
         now = time.time()
-        f = self.window_state.record_and_compute(user_id, amount, "Everyday Market", "US", device_id, now)
+        f = self.window_state.record_and_compute(customer_id, amount, "Blinkit India", "IN", device_id, now)
 
         assert f.velocity_1m >= 1
         assert f.velocity_5m >= 1
         assert f.velocity_1h >= 1
-        assert f.rolling_amount_1h >= 49.99
+        assert f.rolling_amount_1h >= 499.0
 
         # Step 3: Write & Read Real-time Features in Redis Feature Store
-        redis_key = f"features:user:{user_id}"
+        redis_key = f"features:user:{customer_id}"
         self.r.hset(redis_key, mapping={
             "velocity_1m": f.velocity_1m,
             "velocity_5m": f.velocity_5m,
@@ -97,31 +105,35 @@ class TestRealtimeE2EPipeline:
                 MERGE (d:Device {id: $device_id})
                 MERGE (u)-[r:USED_DEVICE]->(d)
                 ON CREATE SET r.first_seen = timestamp()
-            """, user_id=user_id, device_id=device_id)
+            """, user_id=customer_id, device_id=device_id)
 
             result = session.run("""
                 MATCH (u:User {id: $user_id})-[:USED_DEVICE]->(d:Device)<-[:USED_DEVICE]-(other:User)
                 RETURN count(DISTINCT other) AS shared_users
-            """, user_id=user_id)
+            """, user_id=customer_id)
             record = result.single()
             shared_users = record["shared_users"] if record else 0
 
-        # Step 5: Machine Learning Inference (XGBoost)
+        # Step 5: Machine Learning Inference (XGBoost on Banking Features)
         ml_input = {
-            "amount": amount,
-            "v1": txn_event["v1"],
-            "v2": txn_event["v2"],
-            "v3": txn_event["v3"],
+            "customer_id": customer_id,
+            "transaction_amount": amount,
+            "account_balance": 50000.0,
+            "account_type": "Savings",
+            "transaction_type": "UPI",
+            "channel": "Mobile Banking",
+            "kyc_status": "Verified",
+            "credit_score": 750,
         }
-        score, shap_drivers = self.credit_model.predict(ml_input)
+        score, shap_drivers = self.banking_model.predict(ml_input)
         assert 0.0 <= score <= 1.0
 
         # Step 6: Decision Engine Evaluation
         ctx = DecisionContext(
             fraud_score=score,
             amount=amount,
-            currency="USD",
-            user_id=user_id,
+            currency="INR",
+            user_id=customer_id,
             realtime_features={"velocity_1m": int(stored_features["velocity_1m"])},
             graph_risk={"graph_shared_device_users": shared_users, "graph_risk_score": 0.0},
         )
@@ -154,8 +166,8 @@ class TestRealtimeE2EPipeline:
         # Evaluate decision with graph collusion risk
         ctx = DecisionContext(
             fraud_score=0.92,
-            amount=8500.0,
-            currency="USD",
+            amount=850000.0,
+            currency="INR",
             user_id=fraudster_1,
             realtime_features={"velocity_1m": 10},
             graph_risk={"graph_shared_device_users": shared_users + 1, "graph_shared_device_frauds": 3},

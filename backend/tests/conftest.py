@@ -108,39 +108,59 @@ def client(db_session) -> Generator[TestClient, None, None]:
 
 
 @pytest.fixture
-def sample_credit_transaction_payload() -> Dict[str, Any]:
-    """Normal low-risk credit transaction payload."""
-    payload = {
-        "amount": 45.50,
-        "currency": "USD",
-        "merchant": "Whole Foods Market",
-        "category": "groceries",
-        "country": "US",
-        "device_fingerprint": "dev-trusted-01",
-        "ip_address": "12.34.56.78",
+def sample_banking_transaction_payload() -> Dict[str, Any]:
+    """Normal low-risk Indian banking transaction payload."""
+    return {
+        "customer_id": "CUST_1001",
+        "account_type": "Savings",
+        "transaction_type": "UPI",
+        "transaction_amount": 450.0,
+        "transaction_direction": "Debit",
+        "account_balance": 25000.0,
+        "merchant_category": "Grocery",
+        "state": "Maharashtra",
+        "credit_score": 750,
+        "has_loan": False,
+        "loan_type": "None",
+        "emi_amount": 0.0,
+        "transaction_status": "Completed",
+        "channel": "Mobile Banking",
+        "kyc_status": "Verified",
+        "transaction_hour": 14,
+        "transaction_date": "2026-10-07",
+        "transaction_time": "14:30:00",
+        "merchant": "Blinkit India",
+        "category": "Grocery",
+        "currency": "INR",
     }
-    for i in range(1, 29):
-        payload[f"v{i}"] = 0.01
-    return payload
 
 
 @pytest.fixture
-def suspicious_credit_transaction_payload() -> Dict[str, Any]:
-    """High-risk anomalous transaction payload."""
-    payload = {
-        "amount": 9500.00,
-        "currency": "USD",
-        "merchant": "Offshore Crypto Exchange",
-        "category": "cryptocurrency",
-        "country": "XX",
-        "device_fingerprint": "dev-tor-01",
-        "ip_address": "198.51.100.99",
-        "v1": -4.5, "v2": 3.8, "v3": -5.2, "v4": 4.9, "v14": -7.5, "v17": -8.1
+def suspicious_banking_transaction_payload() -> Dict[str, Any]:
+    """High-risk anomalous Indian banking transaction payload."""
+    return {
+        "customer_id": "CUST_9999",
+        "account_type": "Current",
+        "transaction_type": "IMPS",
+        "transaction_amount": 490000.0,
+        "transaction_direction": "Debit",
+        "account_balance": 500.0,
+        "merchant_category": "Jewellery",
+        "state": "Maharashtra",
+        "credit_score": 450,
+        "has_loan": True,
+        "loan_type": "Personal",
+        "emi_amount": 25000.0,
+        "transaction_status": "Flagged",
+        "channel": "Net Banking",
+        "kyc_status": "Pending",
+        "transaction_hour": 3,
+        "transaction_date": "2026-10-07",
+        "transaction_time": "03:15:00",
+        "merchant": "Tanishq Jewellers",
+        "category": "Jewellery",
+        "currency": "INR",
     }
-    for i in range(1, 29):
-        if f"v{i}" not in payload:
-            payload[f"v{i}"] = -1.2 if i % 2 == 0 else 1.5
-    return payload
 
 
 @pytest.fixture

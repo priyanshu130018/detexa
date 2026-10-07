@@ -2,6 +2,7 @@
 app/features/builder.py
 ─────────────────────────────────────────────────────────────────────────────
 Unified Fraud Feature Builder for Detexa Platform.
+Version: 4.0.0 (Indian Banking Transaction System)
 
 Provides a single, authoritative feature extraction engine shared across:
 - Model Training (preventing data leakage and feature skew)
@@ -10,10 +11,10 @@ Provides a single, authoritative feature extraction engine shared across:
 - Streaming Window Ingestion (Apache Flink)
 
 Combines:
-1. Core Transaction & PCA Dimensions
+1. Core Indian Banking Transaction & Balance Signals
 2. Diurnal & Temporal Cyclical Encodings
-3. Behavioral & Biometric Signals
-4. Redis Real-Time Sliding Windows
+3. Customer Historical Behavioral Velocity
+4. Real-time Redis Sliding Windows
 5. Neo4j Graph Relationship & Fraud Ring Features
 """
 
@@ -53,54 +54,70 @@ class UnifiedFraudFeatureBuilder:
         timestamp: Optional[float] = None,
     ) -> UnifiedFeatureVector:
         """
-        Builds a canonical unified feature vector from raw payload + optional Redis and Graph sources.
+        Builds a canonical unified feature vector from raw banking payload + optional Redis and Graph sources.
         """
         ts = timestamp or float(payload.get("timestamp", time.time()))
         dt = datetime.fromtimestamp(ts, tz=timezone.utc)
-        hour = float(payload.get("hour_of_day", dt.hour + dt.minute / 60.0))
+
+        # ── 1. Transaction Amount & Account Balances ─────────────────────────
+        raw_amt = payload.get("transaction_amount", payload.get("amount", payload.get("Amount", 0.0)))
+        amount = float(raw_amt) if raw_amt is not None else 0.0
+        amount_clean = max(amount, 0.0)
+
+        raw_balance = payload.get("account_balance", payload.get("balance", 50000.0))
+        balance = float(raw_balance) if raw_balance is not None else 50000.0
+        balance_clean = max(balance, 0.0)
+
+        credit_score = float(payload.get("credit_score", 650.0))
+        has_loan = float(payload.get("has_loan", 0.0))
+        emi_amt = float(payload.get("emi_amount", 0.0))
+        emi_clean = max(emi_amt, 0.0)
+
+        # ── 2. Diurnal & Temporal Features ───────────────────────────────────
+        hour_val = payload.get("transaction_hour", payload.get("hour_of_day", dt.hour + dt.minute / 60.0))
+        try:
+            hour = float(hour_val)
+        except (ValueError, TypeError):
+            hour = float(dt.hour)
 
         feat_values: Dict[str, float] = {}
 
-        # ── 1. Core Transaction & Amount Features ────────────────────────────
-        amount = float(payload.get("amount", payload.get("Amount", 0.0)))
-        feat_values["amount"] = amount
-        feat_values["log_amount"] = float(np.log1p(max(amount, 0.0)))
-        feat_values["amount_sq"] = float(amount ** 2)
+        # Group 1: Transaction & Balance
+        feat_values["transaction_amount"] = amount_clean
+        feat_values["log_transaction_amount"] = float(np.log1p(amount_clean))
+        feat_values["transaction_amount_sq"] = float(amount_clean ** 2)
+        feat_values["account_balance"] = balance_clean
+        feat_values["log_account_balance"] = float(np.log1p(balance_clean))
+        feat_values["amount_to_balance_ratio"] = float(amount_clean / (balance_clean + 1.0))
+        feat_values["credit_score"] = credit_score
+        feat_values["has_loan"] = has_loan
+        feat_values["emi_amount"] = emi_clean
+        feat_values["log_emi_amount"] = float(np.log1p(emi_clean))
+        feat_values["emi_to_balance_ratio"] = float(emi_clean / (balance_clean + 1.0))
+        feat_values["amount_to_emi_ratio"] = float(amount_clean / (emi_clean + 1.0))
 
-        # Extract PCA components v1 .. v28
-        pca_sq_sum = 0.0
-        v_dict: Dict[str, float] = {}
-        for i in range(1, 29):
-            col_k = f"v{i}"
-            val = float(payload.get(col_k, payload.get(col_k.upper(), 0.0)))
-            v_dict[col_k] = val
-            feat_values[col_k] = val
-            pca_sq_sum += val ** 2
-
-        feat_values["v_norm"] = float(np.sqrt(pca_sq_sum))
-
-        # Interaction terms
-        feat_values["v1_v2_interaction"] = v_dict.get("v1", 0.0) * v_dict.get("v2", 0.0)
-        feat_values["v3_v7_interaction"] = v_dict.get("v3", 0.0) * v_dict.get("v7", 0.0)
-        feat_values["v4_v11_interaction"] = v_dict.get("v4", 0.0) * v_dict.get("v11", 0.0)
-        feat_values["v12_v10_interaction"] = v_dict.get("v12", 0.0) * v_dict.get("v10", 0.0)
-        feat_values["v14_v12_interaction"] = v_dict.get("v14", 0.0) * v_dict.get("v12", 0.0)
-        feat_values["v14_v17_interaction"] = v_dict.get("v14", 0.0) * v_dict.get("v17", 0.0)
-        feat_values["v17_v12_interaction"] = v_dict.get("v17", 0.0) * v_dict.get("v12", 0.0)
-
-        # ── 2. Temporal & Diurnal Encodings ──────────────────────────────────
-        feat_values["hour_of_day"] = hour
-        feat_values["sin_time"] = float(np.sin(2.0 * np.pi * hour / 24.0))
-        feat_values["cos_time"] = float(np.cos(2.0 * np.pi * hour / 24.0))
+        # Group 2: Temporal
+        feat_values["transaction_hour"] = hour
+        feat_values["hour_sin"] = float(np.sin(2.0 * np.pi * hour / 24.0))
+        feat_values["hour_cos"] = float(np.cos(2.0 * np.pi * hour / 24.0))
         feat_values["is_night_txn"] = 1.0 if (hour < 6.0 or hour >= 22.0) else 0.0
 
-        # ── 3. Behavioral & Biometrics ───────────────────────────────────────
+        # Group 3: Customer History & Velocity (Defaults for single realtime txn if not provided)
+        feat_values["cust_txn_count_prior"] = float(payload.get("cust_txn_count_prior", 1.0))
+        feat_values["cust_avg_amount_prior"] = float(payload.get("cust_avg_amount_prior", amount_clean or 25000.0))
+        feat_values["cust_amount_diff_from_avg"] = float(payload.get("cust_amount_diff_from_avg", amount_clean - feat_values["cust_avg_amount_prior"]))
+        feat_values["cust_amount_ratio_to_avg"] = float(payload.get("cust_amount_ratio_to_avg", amount_clean / (feat_values["cust_avg_amount_prior"] + 1.0)))
+        feat_values["cust_time_since_last_txn_hours"] = float(payload.get("cust_time_since_last_txn_hours", 24.0))
+        feat_values["cust_channel_change"] = float(payload.get("cust_channel_change", 0.0))
+        feat_values["cust_type_change"] = float(payload.get("cust_type_change", 0.0))
+
+        # Group 4: Behavioral & Biometrics
         typing_spd = float(payload.get("typing_speed", 45.0))
         mouse_vel = float(payload.get("mouse_velocity", 250.0))
         failed_lg = float(payload.get("failed_logins", 0.0))
-        is_vpn = float(bool(payload.get("is_vpn", False)))
-        is_tor = float(bool(payload.get("is_tor", False)))
-        dev_change = float(bool(payload.get("device_change", payload.get("device_changed", False))))
+        is_vpn = 1.0 if payload.get("is_vpn") in (True, 1, "true", "True") else 0.0
+        is_tor = 1.0 if payload.get("is_tor") in (True, 1, "true", "True") else 0.0
+        dev_change = 1.0 if payload.get("device_change") in (True, 1, "true", "True") else 0.0
 
         feat_values["typing_speed"] = typing_spd
         feat_values["mouse_velocity"] = mouse_vel
@@ -110,112 +127,85 @@ class UnifiedFraudFeatureBuilder:
         feat_values["device_change"] = dev_change
         feat_values["risk_combo"] = is_vpn + (2.0 * is_tor) + dev_change
 
-        # ── 4. Redis Real-Time Sliding Windows ───────────────────────────────
+        # Group 5: Redis Real-Time Sliding Windows
         if isinstance(redis_features, HotFeatureVector):
-            rf_dict = redis_features.to_ml_features()
+            rf = redis_features
+            feat_values["velocity_1m"] = float(rf.velocity_1m)
+            feat_values["velocity_5m"] = float(rf.velocity_5m)
+            feat_values["velocity_15m"] = float(rf.velocity_15m)
+            feat_values["velocity_1h"] = float(rf.velocity_1h)
+            feat_values["velocity_24h"] = float(rf.velocity_24h)
+            feat_values["rolling_amount_1h"] = float(rf.rolling_amount_1h)
+            feat_values["avg_amount_1h"] = float(rf.avg_amount_1h)
+            feat_values["max_amount_1h"] = float(rf.max_amount_1h)
+            feat_values["rolling_amount_24h"] = float(rf.rolling_amount_24h)
+            feat_values["avg_amount_24h"] = float(rf.avg_amount_24h)
+            feat_values["amount_deviation_ratio"] = float(rf.amount_deviation_ratio)
+            feat_values["distinct_merchants_1h"] = float(rf.distinct_merchants_1h)
+            feat_values["distinct_categories_1h"] = float(rf.distinct_categories_1h)
+            feat_values["distinct_devices_15m"] = float(rf.distinct_devices_15m)
+            feat_values["distinct_ips_15m"] = float(rf.distinct_ips_15m)
+            feat_values["is_foreign_transaction"] = 1.0 if rf.is_foreign_transaction else 0.0
+            feat_values["failed_auth_5m"] = float(rf.failed_auth_5m)
+            feat_values["failed_auth_1h"] = float(rf.failed_auth_1h)
+            feat_values["consecutive_failures"] = float(rf.consecutive_failures)
+            feat_values["high_risk_flags_24h"] = float(rf.high_risk_flags_24h)
         elif isinstance(redis_features, dict):
-            rf_dict = redis_features
+            for k in [
+                "velocity_1m", "velocity_5m", "velocity_15m", "velocity_1h", "velocity_24h",
+                "rolling_amount_1h", "avg_amount_1h", "max_amount_1h", "rolling_amount_24h",
+                "avg_amount_24h", "amount_deviation_ratio", "distinct_merchants_1h",
+                "distinct_categories_1h", "distinct_devices_15m", "distinct_ips_15m",
+                "is_foreign_transaction", "failed_auth_5m", "failed_auth_1h",
+                "consecutive_failures", "high_risk_flags_24h"
+            ]:
+                feat_values[k] = float(redis_features.get(k, FEATURE_DEFAULT_MAP[k]))
         else:
-            rf_dict = {}
+            for k in [
+                "velocity_1m", "velocity_5m", "velocity_15m", "velocity_1h", "velocity_24h",
+                "rolling_amount_1h", "avg_amount_1h", "max_amount_1h", "rolling_amount_24h",
+                "avg_amount_24h", "amount_deviation_ratio", "distinct_merchants_1h",
+                "distinct_categories_1h", "distinct_devices_15m", "distinct_ips_15m",
+                "is_foreign_transaction", "failed_auth_5m", "failed_auth_1h",
+                "consecutive_failures", "high_risk_flags_24h"
+            ]:
+                feat_values[k] = FEATURE_DEFAULT_MAP[k]
 
-        feat_values["velocity_1m"] = float(rf_dict.get("velocity_1m", payload.get("velocity_1m", 1.0)))
-        feat_values["velocity_5m"] = float(rf_dict.get("velocity_5m", payload.get("velocity_5m", 1.0)))
-        feat_values["velocity_15m"] = float(rf_dict.get("velocity_15m", payload.get("velocity_15m", 1.0)))
-        feat_values["velocity_1h"] = float(rf_dict.get("velocity_1h", payload.get("velocity_1h", 1.0)))
-        feat_values["velocity_24h"] = float(rf_dict.get("velocity_24h", payload.get("velocity_24h", 1.0)))
-        feat_values["rolling_amount_1h"] = float(rf_dict.get("rolling_amount_1h", payload.get("rolling_amount_1h", amount)))
-        feat_values["avg_amount_1h"] = float(rf_dict.get("avg_amount_1h", payload.get("avg_amount_1h", amount)))
-        feat_values["max_amount_1h"] = float(rf_dict.get("max_amount_1h", payload.get("max_amount_1h", amount)))
-        feat_values["rolling_amount_24h"] = float(rf_dict.get("rolling_amount_24h", payload.get("rolling_amount_24h", amount)))
-        feat_values["avg_amount_24h"] = float(rf_dict.get("avg_amount_24h", payload.get("avg_amount_24h", amount)))
-        feat_values["amount_deviation_ratio"] = float(rf_dict.get("amount_deviation_ratio", payload.get("amount_deviation_ratio", 1.0)))
-        feat_values["distinct_merchants_1h"] = float(rf_dict.get("distinct_merchants_1h", payload.get("distinct_merchants_1h", 1.0)))
-        feat_values["distinct_categories_1h"] = float(rf_dict.get("distinct_categories_1h", payload.get("distinct_categories_1h", 1.0)))
-        feat_values["distinct_devices_15m"] = float(rf_dict.get("distinct_devices_15m", payload.get("distinct_devices_15m", 1.0)))
-        feat_values["distinct_ips_15m"] = float(rf_dict.get("distinct_ips_15m", payload.get("distinct_ips_15m", 1.0)))
-        feat_values["is_foreign_transaction"] = float(bool(rf_dict.get("is_foreign_transaction", payload.get("is_foreign_transaction", False))))
-        feat_values["failed_auth_5m"] = float(rf_dict.get("failed_auth_5m", payload.get("failed_auth_5m", 0.0)))
-        feat_values["failed_auth_1h"] = float(rf_dict.get("failed_auth_1h", payload.get("failed_auth_1h", 0.0)))
-        feat_values["consecutive_failures"] = float(rf_dict.get("consecutive_failures", payload.get("consecutive_failures", 0.0)))
-        feat_values["high_risk_flags_24h"] = float(rf_dict.get("high_risk_flags_24h", payload.get("high_risk_flags_24h", 0.0)))
-
-        # ── 5. Neo4j Graph Relationship Features ─────────────────────────────
+        # Group 6: Neo4j Graph Relationship Features
         if isinstance(graph_features, GraphRiskFeatures):
-            gf_dict = graph_features.to_ml_features()
+            gf = graph_features
+            feat_values["graph_shared_device_users"] = float(gf.shared_device_users_count)
+            feat_values["graph_shared_ip_users"] = float(gf.shared_ip_users_count)
+            feat_values["graph_shared_device_frauds"] = float(gf.device_fraud_history_count)
+            feat_values["graph_shared_ip_frauds"] = float(gf.ip_fraud_history_count)
+            feat_values["graph_fraud_ring_size"] = float(gf.fraud_ring_size)
+            feat_values["graph_is_device_shared"] = 1.0 if gf.is_device_shared else 0.0
+            feat_values["graph_is_ip_shared"] = 1.0 if gf.is_ip_shared else 0.0
+            feat_values["graph_risk_score"] = float(gf.composite_graph_risk_score)
         elif isinstance(graph_features, dict):
-            gf_dict = graph_features
+            for k in [
+                "graph_shared_device_users", "graph_shared_ip_users",
+                "graph_shared_device_frauds", "graph_shared_ip_frauds",
+                "graph_fraud_ring_size", "graph_is_device_shared",
+                "graph_is_ip_shared", "graph_risk_score"
+            ]:
+                feat_values[k] = float(graph_features.get(k, FEATURE_DEFAULT_MAP[k]))
         else:
-            gf_dict = {}
+            for k in [
+                "graph_shared_device_users", "graph_shared_ip_users",
+                "graph_shared_device_frauds", "graph_shared_ip_frauds",
+                "graph_fraud_ring_size", "graph_is_device_shared",
+                "graph_is_ip_shared", "graph_risk_score"
+            ]:
+                feat_values[k] = FEATURE_DEFAULT_MAP[k]
 
-        feat_values["graph_shared_device_users"] = float(gf_dict.get("graph_shared_device_users", payload.get("graph_shared_device_users", 1.0)))
-        feat_values["graph_shared_ip_users"] = float(gf_dict.get("graph_shared_ip_users", payload.get("graph_shared_ip_users", 1.0)))
-        feat_values["graph_shared_device_frauds"] = float(gf_dict.get("graph_shared_device_frauds", payload.get("graph_shared_device_frauds", 0.0)))
-        feat_values["graph_shared_ip_frauds"] = float(gf_dict.get("graph_shared_ip_frauds", payload.get("graph_shared_ip_frauds", 0.0)))
-        feat_values["graph_fraud_ring_size"] = float(gf_dict.get("graph_fraud_ring_size", payload.get("graph_fraud_ring_size", 1.0)))
-        feat_values["graph_is_device_shared"] = float(bool(gf_dict.get("graph_is_device_shared", payload.get("graph_is_device_shared", False))))
-        feat_values["graph_is_ip_shared"] = float(bool(gf_dict.get("graph_is_ip_shared", payload.get("graph_is_ip_shared", False))))
-        feat_values["graph_risk_score"] = float(gf_dict.get("graph_risk_score", payload.get("graph_risk_score", 0.0)))
-
-        # Apply any default imputations for missing keys
-        for k, default_v in FEATURE_DEFAULT_MAP.items():
-            if k not in feat_values or np.isnan(feat_values[k]):
-                feat_values[k] = default_v
-
-        user_id_str = str(payload.get("user_id", "")) if payload.get("user_id") else None
-        txn_ref_str = str(payload.get("transaction_ref", payload.get("ref", ""))) if payload.get("transaction_ref") or payload.get("ref") else None
+        # Ensure all canonical features are present in order
+        for name, default in FEATURE_DEFAULT_MAP.items():
+            if name not in feat_values:
+                feat_values[name] = default
 
         return UnifiedFeatureVector(
-            values=feat_values,
+            features=feat_values,
             schema_version=cls.SCHEMA_VERSION,
-            user_id=user_id_str,
-            transaction_ref=txn_ref_str,
-            timestamp=ts,
-            raw_context=payload,
+            extracted_at=ts,
         )
-
-    @classmethod
-    def build_batch_dataframe(cls, records: List[Dict[str, Any]]) -> pd.DataFrame:
-        """
-        Builds a unified DataFrame strictly adhering to canonical feature names and column order.
-        """
-        vectors = [cls.build_realtime_vector(rec) for rec in records]
-        rows = [v.to_dict() for v in vectors]
-        return pd.DataFrame(rows, columns=CANONICAL_FEATURE_NAMES)
-
-    @classmethod
-    def build_training_dataframe(cls, df_raw: pd.DataFrame) -> pd.DataFrame:
-        """
-        Transforms raw historical DataFrame (e.g. Kaggle Credit dataset) into the exact canonical schema.
-        Prevents feature mismatch during offline training.
-        """
-        df = df_raw.copy()
-        col_map = {c: c.lower() for c in df.columns}
-        df.rename(columns=col_map, inplace=True)
-
-        records = df.to_dict(orient="records")
-        return cls.build_batch_dataframe(records)
-
-    @classmethod
-    def get_schema_metadata(cls) -> Dict[str, Any]:
-        """
-        Exports full feature schema metadata including definitions, groups, and versions.
-        """
-        groups: Dict[str, List[Dict[str, Any]]] = {}
-        for f in CANONICAL_FEATURE_DEFINITIONS:
-            g_name = f.group.value
-            if g_name not in groups:
-                groups[g_name] = []
-            groups[g_name].append({
-                "name": f.name,
-                "dtype": f.dtype,
-                "default": f.default_value,
-                "description": f.description,
-            })
-
-        return {
-            "schema_version": cls.SCHEMA_VERSION,
-            "total_feature_count": len(CANONICAL_FEATURE_NAMES),
-            "feature_names": CANONICAL_FEATURE_NAMES,
-            "feature_groups": groups,
-            "group_counts": {k: len(v) for k, v in groups.items()},
-        }

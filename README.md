@@ -121,25 +121,23 @@ detexa/
 
 ### Expected Dataset Details
 - **Dataset Name:** `indian_banking_transactions.csv`
-- **Expected Directory:** `data/raw/` (or `backend/data/`)
-- **Target File Path:** `data/raw/indian_banking_transactions.csv`
+- **Expected Directory:** `backend/data/raw/`
+- **Target File Path:** `backend/data/raw/indian_banking_transactions.csv`
 
 ### Step-by-Step Setup:
 1. Download `indian_banking_transactions.csv` from Kaggle.
-2. Create the raw data directory in your project root:
+2. Create the raw data directory in backend:
    ```bash
-   mkdir -p data/raw
+   mkdir -p backend/data/raw
    ```
-3. Place the downloaded CSV file into `data/raw/`:
+3. Place the downloaded CSV file into `backend/data/raw/`:
    ```bash
-   cp /path/to/downloaded/indian_banking_transactions.csv data/raw/indian_banking_transactions.csv
+   cp /path/to/downloaded/indian_banking_transactions.csv backend/data/raw/indian_banking_transactions.csv
    ```
 4. Run the training or preprocessing pipeline if retraining models:
    ```bash
    python backend/scripts/train_models.py
    ```
-
-*(If the CSV is not supplied, built-in synthetic data generators enable immediate functional testing without manual downloads).*
 
 ---
 

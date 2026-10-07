@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Any, Dict, Generic, List, Optional, TypeVar
 from uuid import UUID
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, model_validator
 
 T = TypeVar("T")
 
@@ -117,45 +117,72 @@ class ModelMetadataOut(BaseModel):
     metrics: Optional[Dict[str, Any]] = None
     trained_at: datetime
 
-    model_config = {"from_attributes": True}
+    model_config = {"from_attributes": True, "protected_namespaces": ()}
 
 
 # ── Transaction Schemas ─────────────────────────────────────────────────────
 
 class TransactionIn(BaseModel):
-    amount: float = Field(..., gt=0, description="Transaction monetary amount (must be > 0)")
-    currency: Optional[str] = Field("USD", max_length=10, description="ISO Currency code")
+    transaction_id: Optional[str] = Field(None, description="Unique transaction ID (e.g. TXN000000001)")
+    customer_id: Optional[str] = Field(None, description="Associated Customer ID (e.g. CUST003688)")
+    transaction_date: Optional[str] = Field(None, description="Transaction date (YYYY-MM-DD)")
+    transaction_time: Optional[str] = Field(None, description="Transaction time (HH:MM)")
+    account_type: Optional[str] = Field("Savings", description="Savings, Current, Salary, NRI, Fixed Deposit")
+    transaction_type: Optional[str] = Field("UPI", description="UPI, IMPS, NEFT, POS, ATM_Withdrawal, Net_Banking, RTGS, Auto_Debit, Cheque, Credit_Card")
+    transaction_amount: Optional[float] = Field(None, gt=0, description="Transaction amount in INR (must be > 0)")
+    amount: Optional[float] = Field(None, gt=0, description="Monetary amount (alias for transaction_amount)")
+    transaction_direction: Optional[str] = Field("Debit", description="Debit or Credit")
+    account_balance: Optional[float] = Field(50000.0, ge=0, description="Customer account balance in INR")
+    merchant_category: Optional[str] = Field("Retail", description="Retail, Food & Dining, E-Commerce, Travel, etc.")
+    state: Optional[str] = Field("Maharashtra", description="Indian State")
+    credit_score: Optional[int] = Field(650, ge=300, le=900, description="Credit score [300 - 900]")
+    has_loan: Optional[int] = Field(0, description="1 if customer has loan, else 0")
+    loan_type: Optional[str] = Field("None", description="Personal, Home, Auto, Business, Education, Gold, None")
+    emi_amount: Optional[float] = Field(0.0, ge=0, description="Monthly EMI amount in INR")
+    transaction_status: Optional[str] = Field("Success", description="Success, Failed, Reversed, Pending")
+    channel: Optional[str] = Field("Mobile_App", description="Mobile_App, Web, ATM, POS_Terminal, Branch, API")
+    kyc_status: Optional[str] = Field("Verified", description="Verified, Pending, Expired")
+    transaction_hour: Optional[int] = Field(None, ge=0, le=23, description="Hour of transaction (0-23)")
+
+    # Additional metadata / runtime integration
+    currency: Optional[str] = Field("INR", max_length=10, description="ISO Currency code")
     merchant: Optional[str] = Field("Online Merchant", max_length=150, description="Merchant name")
-    category: Optional[str] = Field("General", max_length=60, description="Merchant industry category")
-    country: Optional[str] = Field("US", max_length=60, description="Country code")
+    category: Optional[str] = Field(None, max_length=60, description="Merchant industry category")
+    country: Optional[str] = Field("IN", max_length=60, description="Country code")
     user_id: Optional[str] = Field(None, description="Associated user ID")
     device_fingerprint: Optional[str] = Field(None, description="Client device fingerprint hash")
     user_agent: Optional[str] = Field(None, description="Client user agent string")
     ip_address: Optional[str] = Field(None, description="Client IP address")
 
-    # Kaggle PCA Components V1–V28
-    v1: float = 0.0;  v2: float = 0.0;  v3: float = 0.0
-    v4: float = 0.0;  v5: float = 0.0;  v6: float = 0.0
-    v7: float = 0.0;  v8: float = 0.0;  v9: float = 0.0
-    v10: float = 0.0; v11: float = 0.0; v12: float = 0.0
-    v13: float = 0.0; v14: float = 0.0; v15: float = 0.0
-    v16: float = 0.0; v17: float = 0.0; v18: float = 0.0
-    v19: float = 0.0; v20: float = 0.0; v21: float = 0.0
-    v22: float = 0.0; v23: float = 0.0; v24: float = 0.0
-    v25: float = 0.0; v26: float = 0.0; v27: float = 0.0
-    v28: float = 0.0
-
 
 class TransactionOut(BaseModel):
     id: UUID
     transaction_ref: str
+    customer_id: Optional[str] = None
     user_id: Optional[UUID] = None
     merchant_id: Optional[UUID] = None
     amount: float
-    currency: str = "USD"
+    transaction_amount: Optional[float] = None
+    currency: str = "INR"
     merchant: Optional[str] = None
     category: Optional[str] = None
+    merchant_category: Optional[str] = None
     country: Optional[str] = None
+    account_type: Optional[str] = None
+    transaction_type: Optional[str] = None
+    transaction_direction: Optional[str] = None
+    account_balance: Optional[float] = None
+    state: Optional[str] = None
+    credit_score: Optional[int] = None
+    has_loan: Optional[int] = None
+    loan_type: Optional[str] = None
+    emi_amount: Optional[float] = None
+    transaction_status: Optional[str] = None
+    channel: Optional[str] = None
+    kyc_status: Optional[str] = None
+    transaction_hour: Optional[int] = None
+    transaction_date: Optional[str] = None
+    transaction_time: Optional[str] = None
     fraud_score: Optional[float] = None
     risk_level: Optional[str] = None
     is_fraud: bool = False
@@ -168,16 +195,6 @@ class TransactionDetailOut(TransactionOut):
     device: Optional[DeviceOut] = None
     ip_rel: Optional[IPAddressOut] = None
     merchant_rel: Optional[MerchantOut] = None
-    v1: Optional[float] = None; v2: Optional[float] = None; v3: Optional[float] = None
-    v4: Optional[float] = None; v5: Optional[float] = None; v6: Optional[float] = None
-    v7: Optional[float] = None; v8: Optional[float] = None; v9: Optional[float] = None
-    v10: Optional[float] = None; v11: Optional[float] = None; v12: Optional[float] = None
-    v13: Optional[float] = None; v14: Optional[float] = None; v15: Optional[float] = None
-    v16: Optional[float] = None; v17: Optional[float] = None; v18: Optional[float] = None
-    v19: Optional[float] = None; v20: Optional[float] = None; v21: Optional[float] = None
-    v22: Optional[float] = None; v23: Optional[float] = None; v24: Optional[float] = None
-    v25: Optional[float] = None; v26: Optional[float] = None; v27: Optional[float] = None
-    v28: Optional[float] = None
 
     model_config = {"from_attributes": True}
 
@@ -189,29 +206,41 @@ class SHAPFeatureImpact(BaseModel):
     shap_value: float
 
 
+class FraudExplanationOut(BaseModel):
+    summary: str = Field(..., description="Concise human-readable synthesis of model prediction and SHAP evidence")
+    risk_factors: List[str] = Field(default_factory=list, description="Key bullet points summarizing factual risk factors")
+    source: str = Field("groq_llm", description="Origin of explanation: 'groq_llm' or 'shap_fallback'")
+
+
 class FraudPredictionOut(BaseModel):
     transaction_id: str
     transaction_ref: Optional[str] = None
     fraud_score: float = Field(..., ge=0.0, le=1.0, description="Predicted fraud probability (0.0 to 1.0)")
     risk_level: str = Field(..., description="Low, Medium, or High")
-    decision: str = Field("ALLOW", description="Automated decision: ALLOW, REVIEW, or BLOCK")
+    decision: str = Field("ALLOW", description="Automated decision: ALLOW, CHALLENGE, REVIEW, or BLOCK")
     is_fraud: bool
     shap_top_features: Optional[List[Dict[str, Any]]] = Field(None, description="Top SHAP explainability drivers")
+    explanation: Optional[FraudExplanationOut] = Field(None, description="AI-generated or fallback explanation based on SHAP evidence")
     model_version: str
     latency_ms: float
 
-    model_config = {"from_attributes": True}
+    model_config = {"from_attributes": True, "protected_namespaces": ()}
 
 
-class BatchCreditFraudIn(BaseModel):
-    transactions: List[TransactionIn] = Field(..., min_length=1, max_length=1000, description="List of transaction payloads")
+class BatchBankingFraudIn(BaseModel):
+    transactions: List[TransactionIn] = Field(..., min_length=1, max_length=1000, description="List of Indian banking transaction payloads")
 
 
-class BatchCreditFraudOut(BaseModel):
+class BatchBankingFraudOut(BaseModel):
     total_processed: int
     fraud_detected_count: int
     predictions: List[FraudPredictionOut]
     batch_latency_ms: float
+
+
+# Backward compatibility aliases
+BatchCreditFraudIn = BatchBankingFraudIn
+BatchCreditFraudOut = BatchBankingFraudOut
 
 
 # ── Decision Schemas ────────────────────────────────────────────────────────
@@ -229,7 +258,7 @@ class DecisionOut(BaseModel):
     created_at: datetime
     transaction: Optional[TransactionOut] = None
 
-    model_config = {"from_attributes": True}
+    model_config = {"from_attributes": True, "protected_namespaces": ()}
 
 
 class DecisionOverrideRequest(BaseModel):
@@ -260,6 +289,7 @@ class AlertOut(BaseModel):
     description: str
     status: str
     shap_values: Optional[List[Dict[str, Any]]] = None
+    explanation: Optional[FraudExplanationOut] = None
     metadata: Optional[Dict[str, Any]] = Field(None, alias="metadata_")
     created_at: datetime
     resolved_at: Optional[datetime] = None
@@ -268,6 +298,21 @@ class AlertOut(BaseModel):
     assigned_to: Optional[UUID] = None
 
     model_config = {"from_attributes": True, "populate_by_name": True}
+
+    @model_validator(mode="before")
+    @classmethod
+    def populate_explanation_from_metadata(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if not data.get("explanation"):
+                meta = data.get("metadata") or data.get("metadata_")
+                if isinstance(meta, dict) and "explanation" in meta:
+                    data["explanation"] = meta["explanation"]
+        elif hasattr(data, "metadata_"):
+            meta = getattr(data, "metadata_")
+            if isinstance(meta, dict) and "explanation" in meta and not getattr(data, "explanation", None):
+                # When converting from ORM object
+                pass
+        return data
 
 
 class AlertDetailOut(AlertOut):

@@ -64,9 +64,9 @@ def readiness_probe() -> ReadinessResponse:
         redis_ok = False
 
     try:
-        from app.ml.models.credit_fraud_model import CreditFraudModel
+        from app.ml.models.banking_fraud_model import BankingFraudModel
         from app.ml.models.behavior_model import BehaviorAnomalyModel
-        m1 = CreditFraudModel.get_instance()
+        m1 = BankingFraudModel.get_instance()
         m2 = BehaviorAnomalyModel.get_instance()
         models_ok = m1 is not None and m2 is not None
     except Exception:

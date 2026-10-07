@@ -196,27 +196,27 @@ alembic downgrade -1
 ## 7. Dataset Placement & Model Training
 
 ### 7.1 Dataset Placement
-Detexa utilizes credit transaction datasets (e.g. `indian_banking_transactions.csv`).
+Detexa utilizes the Indian banking transaction dataset: `indian_banking_transactions.csv`.
 
 1. Download the transaction dataset from Kaggle.
-2. Ensure directory `data/raw/` exists:
+2. Ensure directory `backend/data/raw/` exists:
    ```bash
-   mkdir -p data/raw
+   mkdir -p backend/data/raw
    ```
 3. Place the CSV file at:
    ```text
-   data/raw/indian_banking_transactions.csv
+   backend/data/raw/indian_banking_transactions.csv
    ```
 
-### 7.2 Train Credit Fraud Model (XGBoost)
+### 7.2 Train Indian Banking Fraud Model (XGBoost)
 To train and export new model artifacts:
 ```bash
-cd backend
-python -m app.ml.train_credit_model --data-path ../data/raw/indian_banking_transactions.csv
+python backend/scripts/train_banking_fraud_model.py
 ```
 This generates:
-- `backend/models/credit_fraud_xgboost.joblib` (Trained booster)
-- `backend/models/credit_fraud_scaler.joblib` (Feature standardizer)
+- `backend/app/ml/saved/banking_fraud_pipeline.pkl` (Trained pipeline)
+- `backend/app/ml/saved/banking_fraud_pipeline_metadata.json` (Pipeline metadata)
+- `backend/app/ml/saved/feature_metadata.json` (Feature schema)
 
 ### 7.3 Train Behavioral Anomaly Model (Isolation Forest)
 ```bash

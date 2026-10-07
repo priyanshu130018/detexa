@@ -6,6 +6,18 @@ FastAPI application factory, OpenAPI configuration, and lifecycle handlers.
 
 from contextlib import asynccontextmanager
 from datetime import datetime
+import warnings
+
+try:
+    from sklearn.exceptions import InconsistentVersionWarning
+    warnings.filterwarnings("ignore", category=InconsistentVersionWarning)
+except Exception:
+    pass
+warnings.filterwarnings("ignore", message=".*unpickle estimator.*")
+warnings.filterwarnings("ignore", message=r".*serialized model.*")
+warnings.filterwarnings("ignore", message=r".*error_msg\.h.*")
+warnings.filterwarnings("ignore", message=r".*Booster\.save_model.*")
+warnings.filterwarnings("ignore", category=UserWarning, module=r"xgboost(\..*)?")
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,7 +26,7 @@ from fastapi.responses import JSONResponse
 from app.api.v1.api import api_router
 from app.core.config import settings
 from app.core.exceptions import register_exception_handlers
-from app.core.logging import logger
+from app.core.logging import logger, apply_security_log_filters
 from app.core.redis import get_redis_client
 from app.db.base import Base
 from app.db.session import engine
@@ -59,6 +71,7 @@ OPENAPI_TAGS = [
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    apply_security_log_filters()
     logger.info(f"Starting {settings.app_name} v{settings.app_version} [{settings.app_env}]")
 
     # In production, schema is managed strictly via Alembic migrations (alembic upgrade head).
@@ -72,9 +85,9 @@ async def lifespan(app: FastAPI):
 
     # Pre-load singleton ML models
     try:
-        from app.ml.models.credit_fraud_model import CreditFraudModel
+        from app.ml.models.banking_fraud_model import BankingFraudModel
         from app.ml.models.behavior_model import BehaviorAnomalyModel
-        CreditFraudModel.get_instance()
+        BankingFraudModel.get_instance()
         BehaviorAnomalyModel.get_instance()
     except Exception as exc:
         logger.warning(f"Could not pre-load ML models on startup: {exc}")
@@ -171,9 +184,9 @@ def readiness() -> ReadinessResponse:
         redis_ok = False
 
     try:
-        from app.ml.models.credit_fraud_model import CreditFraudModel
+        from app.ml.models.banking_fraud_model import BankingFraudModel
         from app.ml.models.behavior_model import BehaviorAnomalyModel
-        m1 = CreditFraudModel.get_instance()
+        m1 = BankingFraudModel.get_instance()
         m2 = BehaviorAnomalyModel.get_instance()
         models_ok = m1 is not None and m2 is not None
     except Exception:

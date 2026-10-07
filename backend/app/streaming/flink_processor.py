@@ -31,7 +31,7 @@ from app.db.models import (
     Transaction,
 )
 from app.db.session import SessionLocal
-from app.ml.models.credit_fraud_model import CreditFraudModel
+from app.ml.models.banking_fraud_model import BankingFraudModel
 from app.streaming.decision_engine import RealTimeDecisionEngine
 from app.streaming.event_schemas import (
     AggregatedFeatures,
@@ -366,24 +366,39 @@ class FlinkRealTimeStreamProcessor:
             txn = Transaction(
                 id=uuid.uuid4(),
                 user_id=user_id_val,
+                customer_id=getattr(payload, "customer_id", None) or (str(user_id_val) if user_id_val else None),
                 merchant_id=merchant.id,
                 device_id=device.id if device else None,
                 ip_id=ip_obj.id if ip_obj else None,
                 transaction_ref=payload.transaction_ref,
                 amount=payload.amount,
+                transaction_amount=payload.amount,
                 currency=payload.currency,
                 merchant=merchant.name,
                 category=merchant.category,
+                merchant_category=getattr(payload, "merchant_category", payload.category),
                 country=payload.country,
+                account_type=getattr(payload, "account_type", "Savings"),
+                transaction_type=getattr(payload, "transaction_type", "UPI"),
+                transaction_direction=getattr(payload, "transaction_direction", "Debit"),
+                account_balance=getattr(payload, "account_balance", 50000.0),
+                state=getattr(payload, "state", "Maharashtra"),
+                credit_score=getattr(payload, "credit_score", 650),
+                has_loan=getattr(payload, "has_loan", 0),
+                loan_type=getattr(payload, "loan_type", "None"),
+                emi_amount=getattr(payload, "emi_amount", 0.0),
+                transaction_status=getattr(payload, "transaction_status", "Success"),
+                channel=getattr(payload, "channel", "Mobile_App"),
+                kyc_status=getattr(payload, "kyc_status", "Verified"),
+                transaction_hour=getattr(payload, "transaction_hour", 12),
+                transaction_date=getattr(payload, "transaction_date", datetime.now(timezone.utc).strftime("%Y-%m-%d")),
+                transaction_time=getattr(payload, "transaction_time", datetime.now(timezone.utc).strftime("%H:%M")),
                 fraud_score=round(fraud_score, 4),
                 risk_level=risk_level,
                 is_fraud=(decision == DecisionType.BLOCK or fraud_score >= settings.fraud_threshold),
                 label=int(decision == DecisionType.BLOCK),
                 timestamp=datetime.now(timezone.utc),
             )
-            for i in range(1, 29):
-                k = f"v{i}"
-                setattr(txn, k, getattr(payload, k, 0.0))
 
             db.add(txn)
             db.flush()
@@ -401,7 +416,7 @@ class FlinkRealTimeStreamProcessor:
                 decision=decision,
                 shap_values=shap_drivers,
                 latency_ms=round(latency_ms, 2),
-                model_version=CreditFraudModel.MODEL_VERSION,
+                model_version=BankingFraudModel.MODEL_VERSION,
                 created_at=datetime.now(timezone.utc),
             )
             db.add(pred)

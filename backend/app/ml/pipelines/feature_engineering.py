@@ -1,92 +1,33 @@
 """
 app/ml/pipelines/feature_engineering.py
 ─────────────────────────────────────────────────────────────────────────────
-Feature engineering transformers for Credit Fraud and Behavior Anomaly models.
+Feature engineering transformers for Indian Banking Fraud and Behavior Anomaly models.
 """
 
 from typing import List, Optional
 import numpy as np
 import pandas as pd
 from sklearn.base import BaseEstimator, TransformerMixin
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
-CREDIT_FEATURES = [f"V{i}" for i in range(1, 29)] + ["Amount"]
+from app.ml.pipelines.data_preprocessor import (
+    CATEGORICAL_BANKING_FEATURES,
+    DEFAULT_FEATURE_VALUES,
+    NUMERIC_BANKING_FEATURES,
+    BankingDataPreprocessor,
+)
 
 
-class CreditFeatureEngineer(BaseEstimator, TransformerMixin):
+class BankingFeatureEngineer(BankingDataPreprocessor):
     """
-    Transforms PCA features from Kaggle Credit Card dataset by engineering
-    interaction terms, log-transforms, amount squares, and L2 norms.
-    Caches feature names for reliable downstream SHAP explanations.
+    Transforms raw Indian banking transaction records into full numeric & one-hot encoded
+    vectors for training and real-time inference.
     """
+    pass
 
-    def __init__(self):
-        self._scaler = StandardScaler()
-        self._feature_names_cache: List[str] = []
 
-    def fit(self, X: pd.DataFrame, y=None):
-        df = self._add_features(X.copy())
-        cols = self._feature_names(df)
-        self._feature_names_cache = cols
-        self._scaler.fit(df[cols])
-        return self
-
-    def transform(self, X: pd.DataFrame) -> np.ndarray:
-        df = self._add_features(X.copy())
-        cols = self._feature_names(df)
-        if not self._feature_names_cache:
-            self._feature_names_cache = cols
-        return self._scaler.transform(df[cols])
-
-    # ── Internal Feature Generators ──────────────────────────────────────────
-
-    def _add_features(self, df: pd.DataFrame) -> pd.DataFrame:
-        # Standardize column naming: v1 -> V1, amount -> Amount
-        col_map = {c: c.capitalize() if c.lower().startswith("v") else c for c in df.columns}
-        if "amount" in col_map:
-            col_map["amount"] = "Amount"
-        df.rename(columns=col_map, inplace=True)
-
-        if "Amount" in df.columns:
-            df["log_amount"] = np.log1p(df["Amount"].clip(lower=0))
-            df["amount_sq"] = df["Amount"] ** 2
-        else:
-            df["Amount"] = 0.0
-            df["log_amount"] = 0.0
-            df["amount_sq"] = 0.0
-
-        # Fill any missing V columns with 0.0
-        for i in range(1, 29):
-            col = f"V{i}"
-            if col not in df.columns:
-                df[col] = 0.0
-
-        # Non-linear interaction terms known to contribute to fraud separation
-        for a, b in [("V1", "V2"), ("V3", "V4"), ("V14", "V17")]:
-            df[f"{a}_{b}_interaction"] = df[a] * df[b]
-
-        # L2 norm over all V-components
-        v_cols = [f"V{i}" for i in range(1, 29)]
-        df["v_norm"] = np.sqrt((df[v_cols] ** 2).sum(axis=1))
-
-        return df
-
-    def _feature_names(self, df: pd.DataFrame) -> List[str]:
-        base = [f"V{i}" for i in range(1, 29)] + ["Amount"]
-        extra = [
-            "log_amount",
-            "amount_sq",
-            "V1_V2_interaction",
-            "V3_V4_interaction",
-            "V14_V17_interaction",
-            "v_norm",
-        ]
-        return base + extra
-
-    def get_feature_names_out(self, input_features=None) -> List[str]:
-        if self._feature_names_cache:
-            return self._feature_names_cache
-        return [f"V{i}" for i in range(1, 29)] + ["Amount", "log_amount", "amount_sq", "V1_V2_interaction", "V3_V4_interaction", "V14_V17_interaction", "v_norm"]
+# Backward compatibility alias
+CreditFeatureEngineer = BankingFeatureEngineer
 
 
 # ── Behavior Features ────────────────────────────────────────────────────────

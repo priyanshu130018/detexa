@@ -23,7 +23,7 @@ client = TestClient(app)
 
 @pytest.fixture(scope="module")
 def auth_token():
-    email = "tester@detexa.io"
+    email = "tester_api@detexa.io"
     password = "TestPass@1234"
     reg_resp = client.post("/api/v1/auth/register", json={
         "name": "Integration Tester",
@@ -55,16 +55,25 @@ def test_readiness():
 def test_auth_flow(auth_token):
     resp = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {auth_token}"})
     assert resp.status_code == 200
-    assert resp.json()["email"] == "tester@detexa.io"
+    assert resp.json()["email"] == "tester_api@detexa.io"
 
 
-def test_credit_prediction(auth_token):
-    payload = {"amount": 250.0}
-    for i in range(1, 29):
-        payload[f"v{i}"] = 0.0
+def test_banking_prediction(auth_token):
+    payload = {
+        "customer_id": "CUST_9999",
+        "account_type": "Savings",
+        "transaction_type": "UPI",
+        "transaction_amount": 2500.0,
+        "account_balance": 35000.0,
+        "merchant_category": "Electronics",
+        "state": "Maharashtra",
+        "credit_score": 740,
+        "channel": "Mobile Banking",
+        "kyc_status": "Verified",
+    }
 
     resp = client.post(
-        "/api/v1/predict/credit",
+        "/api/v1/predict/transaction",
         json=payload,
         headers={"Authorization": f"Bearer {auth_token}"},
     )
@@ -73,17 +82,30 @@ def test_credit_prediction(auth_token):
     assert "fraud_score" in data
     assert 0.0 <= data["fraud_score"] <= 1.0
     assert data["risk_level"] in ("Low", "Medium", "High")
+    assert "explanation" in data
+    assert "summary" in data["explanation"]
+    assert "risk_factors" in data["explanation"]
 
 
-def test_batch_credit_prediction(auth_token):
+def test_batch_banking_prediction(auth_token):
     batch = {
         "transactions": [
-            {"amount": 100.0, "v1": 0.0, "v2": 0.0},
-            {"amount": 500.0, "v1": -1.5, "v2": 2.0},
+            {
+                "customer_id": "CUST_1",
+                "transaction_amount": 1000.0,
+                "account_balance": 20000.0,
+                "transaction_type": "UPI",
+            },
+            {
+                "customer_id": "CUST_2",
+                "transaction_amount": 50000.0,
+                "account_balance": 1000.0,
+                "transaction_type": "IMPS",
+            },
         ]
     }
     resp = client.post(
-        "/api/v1/predict/credit/batch",
+        "/api/v1/predict/transaction/batch",
         json=batch,
         headers={"Authorization": f"Bearer {auth_token}"},
     )
@@ -127,7 +149,9 @@ def test_alerts_and_stats(auth_token):
         headers={"Authorization": f"Bearer {auth_token}"},
     )
     assert alerts_resp.status_code == 200
-    assert isinstance(alerts_resp.json(), list)
+    data = alerts_resp.json()
+    assert "items" in data
+    assert "total" in data
 
 
 def test_transactions_listing(auth_token):
@@ -136,4 +160,6 @@ def test_transactions_listing(auth_token):
         headers={"Authorization": f"Bearer {auth_token}"},
     )
     assert resp.status_code == 200
-    assert isinstance(resp.json(), list)
+    data = resp.json()
+    assert "items" in data
+    assert "total" in data

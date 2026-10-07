@@ -8,7 +8,7 @@ import pytest
 from pydantic import ValidationError
 from app.models.schemas import (
     TransactionIn,
-    BatchCreditFraudIn,
+    BatchBankingFraudIn,
     BehaviorIn,
     UserRegister,
     UserLogin,
@@ -21,37 +21,48 @@ from app.models.schemas import (
 class TestSchemasUnit:
     def test_valid_transaction_in(self):
         data = {
-            "amount": 120.50,
-            "currency": "USD",
-            "merchant": "Amazon Services",
-            "category": "Retail",
-            "v1": -0.5,
-            "v28": 0.12,
+            "customer_id": "CUST_1001",
+            "account_type": "Savings",
+            "transaction_type": "UPI",
+            "transaction_amount": 1200.50,
+            "transaction_direction": "Debit",
+            "account_balance": 45000.0,
+            "merchant_category": "Electronics",
+            "state": "Maharashtra",
+            "credit_score": 750,
+            "has_loan": False,
+            "loan_type": "None",
+            "emi_amount": 0.0,
+            "transaction_status": "Completed",
+            "channel": "Mobile Banking",
+            "kyc_status": "Verified",
+            "transaction_hour": 14,
+            "currency": "INR",
         }
         tx = TransactionIn(**data)
-        assert tx.amount == 120.50
-        assert tx.currency == "USD"
-        assert tx.merchant == "Amazon Services"
-        assert tx.v1 == -0.5
+        assert tx.transaction_amount == 1200.50
+        assert tx.currency == "INR"
+        assert tx.customer_id == "CUST_1001"
+        assert tx.transaction_type == "UPI"
 
     def test_invalid_transaction_negative_amount(self):
         with pytest.raises(ValidationError):
-            TransactionIn(amount=-50.0)
+            TransactionIn(transaction_amount=-50.0)
 
-    def test_valid_batch_credit_fraud(self):
+    def test_valid_batch_banking_fraud(self):
         batch_data = {
             "transactions": [
-                {"amount": 50.0, "v1": 0.1},
-                {"amount": 1000.0, "v1": -2.5, "v2": 3.0},
+                {"customer_id": "CUST_1", "transaction_amount": 500.0, "account_balance": 5000.0},
+                {"customer_id": "CUST_2", "transaction_amount": 10000.0, "account_balance": 20000.0},
             ]
         }
-        batch = BatchCreditFraudIn(**batch_data)
+        batch = BatchBankingFraudIn(**batch_data)
         assert len(batch.transactions) == 2
-        assert batch.transactions[0].amount == 50.0
+        assert batch.transactions[0].transaction_amount == 500.0
 
     def test_empty_batch_rejection(self):
         with pytest.raises(ValidationError):
-            BatchCreditFraudIn(transactions=[])
+            BatchBankingFraudIn(transactions=[])
 
     def test_valid_behavior_in(self):
         data = {
@@ -90,6 +101,6 @@ class TestSchemasUnit:
         assert update.status == "resolved"
 
     def test_alert_resolution_request(self):
-        res = AlertResolutionRequest(resolution_notes="Verified with cardholder successfully.", status="resolved")
+        res = AlertResolutionRequest(resolution_notes="Verified with customer successfully.", status="resolved")
         assert res.status == "resolved"
         assert "Verified" in res.resolution_notes

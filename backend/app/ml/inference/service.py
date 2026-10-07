@@ -1,12 +1,12 @@
 """
 app/ml/inference/service.py
 ─────────────────────────────────────────────────────────────────────────────
-High-Performance Low-Latency Fraud Inference Service.
+High-Performance Low-Latency Fraud Inference Service for Indian Banking Transactions.
 
 Design Principles:
-1. Model Loaded Once: Caches pipeline, native XGBoost Booster, and ONNX Runtime session in memory.
-2. Feature Validation: Sanitizes, validates boundaries, and imputes defaults safely.
-3. Sub-Millisecond Execution: Utilizes ONNX Runtime or XGBoost Booster inplace prediction (<0.5ms).
+1. Model Loaded Once: Caches banking fraud pipeline and native XGBoost Booster in memory.
+2. Feature Validation: Sanitizes, validates boundaries, and imputes Indian banking defaults safely.
+3. Sub-Millisecond Execution: Utilizes XGBoost Booster inplace prediction (<0.5ms).
 4. Safe Failure Handling: Catches corrupted inputs and returns calibrated fallback scores without crashing.
 5. Zero Training-Serving Skew: Interoperates with the Unified Feature Building Layer.
 """
@@ -17,6 +17,13 @@ from typing import Any, Dict, List, Optional, Tuple
 import joblib
 import numpy as np
 import pandas as pd
+import warnings
+import xgboost as xgb
+
+warnings.filterwarnings("ignore", message=r".*serialized model.*")
+warnings.filterwarnings("ignore", message=r".*error_msg\.h.*")
+warnings.filterwarnings("ignore", message=r".*Booster\.save_model.*")
+warnings.filterwarnings("ignore", category=UserWarning, module=r"xgboost(\..*)?")
 
 from app.core.config import settings
 from app.core.logging import logger
@@ -74,7 +81,7 @@ class FraudInferenceService:
             return
 
         # ── 1. Check for ONNX Model & Initialize ONNX Runtime Session ────────
-        onnx_file = found_dir / "credit_fraud_model.onnx"
+        onnx_file = found_dir / "banking_fraud_model.onnx"
         if onnx_file.exists() and ONNX_RUNTIME_AVAILABLE:
             try:
                 sess_options = ort.SessionOptions()
@@ -92,8 +99,13 @@ class FraudInferenceService:
                 logger.warning(f"Failed to load ONNX model ({exc}); falling back to XGBoost Booster.")
                 self._onnx_session = None
 
-        # ── 2. Load Scikit-Learn / XGBoost Pipeline ──────────────────────────
-        pipeline_file = found_dir / settings.credit_model_filename
+        # ── 2. Load Scikit-Learn / XGBoost Banking Pipeline ──────────────────
+        pipeline_file = found_dir / getattr(settings, "banking_model_filename", "banking_fraud_pipeline.pkl")
+        if not pipeline_file.exists():
+            pipeline_file = found_dir / getattr(settings, "credit_model_filename", "banking_fraud_pipeline.pkl")
+        if not pipeline_file.exists():
+            pipeline_file = found_dir / "banking_fraud_pipeline.pkl"
+
         if pipeline_file.exists():
             try:
                 self._pipeline = joblib.load(pipeline_file)
@@ -108,8 +120,11 @@ class FraudInferenceService:
                 elif self._onnx_session is None:
                     self._active_engine = "sklearn_pipeline"
 
+                if self._preprocessor is not None and hasattr(self._preprocessor, "get_feature_names_out"):
+                    self._feature_names = self._preprocessor.get_feature_names_out()
+
                 self._is_loaded = True
-                logger.info(f"Loaded ML inference pipeline from {pipeline_file} (Active Engine: {self._active_engine})")
+                logger.info(f"Loaded Indian banking ML inference pipeline from {pipeline_file} (Active Engine: {self._active_engine})")
             except Exception as exc:
                 logger.error(f"Failed to load pipeline artifact: {exc}")
 
@@ -117,16 +132,16 @@ class FraudInferenceService:
 
     def validate_features(self, payload: Dict[str, Any]) -> ValidationResult:
         """
-        Validates input features:
+        Validates Indian banking input features:
         - Checks for missing or non-finite values (NaN / Inf)
         - Enforces reasonable boundaries
         - Imputes safe defaults
         """
         warnings: List[str] = []
-        sanitized: Dict[str, float] = {}
+        sanitized: Dict[str, Any] = {}
 
         # 1. Amount validation
-        raw_amt = payload.get("amount", payload.get("Amount", 0.0))
+        raw_amt = payload.get("transaction_amount", payload.get("amount", payload.get("Amount", 0.0)))
         try:
             amt = float(raw_amt)
             if np.isnan(amt) or np.isinf(amt) or amt < 0:
@@ -135,27 +150,64 @@ class FraudInferenceService:
         except (ValueError, TypeError):
             warnings.append(f"Non-numeric amount '{raw_amt}'; defaulting to 0.0")
             amt = 0.0
+        sanitized["transaction_amount"] = amt
         sanitized["amount"] = amt
-        sanitized["Amount"] = amt
 
-        # 2. PCA Component validation
-        for i in range(1, 29):
-            k = f"v{i}"
-            raw_v = payload.get(k, payload.get(k.upper(), 0.0))
-            try:
-                val = float(raw_v)
-                if np.isnan(val) or np.isinf(val):
-                    warnings.append(f"Non-finite value for {k}; clamped to 0.0")
-                    val = 0.0
-            except (ValueError, TypeError):
-                warnings.append(f"Invalid value for {k}; defaulting to 0.0")
-                val = 0.0
-            sanitized[k] = val
-            sanitized[k.upper()] = val
+        # 2. Account Balance validation
+        raw_bal = payload.get("account_balance", payload.get("balance", 50000.0))
+        try:
+            bal = float(raw_bal)
+            if np.isnan(bal) or np.isinf(bal) or bal < 0:
+                bal = 50000.0
+        except (ValueError, TypeError):
+            bal = 50000.0
+        sanitized["account_balance"] = bal
 
-        # 3. Temporal values
-        if "Time" in payload or "time" in payload:
-            sanitized["Time"] = float(payload.get("Time", payload.get("time", 0.0)))
+        # 3. Credit score validation
+        raw_credit = payload.get("credit_score", 650)
+        try:
+            credit = int(raw_credit)
+            credit = max(300, min(900, credit))
+        except (ValueError, TypeError):
+            credit = 650
+        sanitized["credit_score"] = credit
+
+        # 4. EMI & Loan validation
+        sanitized["has_loan"] = int(payload.get("has_loan", 0))
+        try:
+            emi = float(payload.get("emi_amount", 0.0))
+            if np.isnan(emi) or np.isinf(emi) or emi < 0:
+                emi = 0.0
+        except (ValueError, TypeError):
+            emi = 0.0
+        sanitized["emi_amount"] = emi
+        sanitized["loan_type"] = str(payload.get("loan_type", "None"))
+
+        # 5. Categoricals
+        sanitized["account_type"] = str(payload.get("account_type", "Savings"))
+        sanitized["transaction_type"] = str(payload.get("transaction_type", "UPI"))
+        sanitized["transaction_direction"] = str(payload.get("transaction_direction", "Debit"))
+        sanitized["merchant_category"] = str(payload.get("merchant_category", payload.get("category", "Retail")))
+        sanitized["state"] = str(payload.get("state", "Maharashtra"))
+        sanitized["channel"] = str(payload.get("channel", "Mobile_App"))
+        sanitized["kyc_status"] = str(payload.get("kyc_status", "Verified"))
+        sanitized["transaction_status"] = str(payload.get("transaction_status", "Success"))
+
+        # 6. Temporal values
+        hour = payload.get("transaction_hour", payload.get("hour_of_day", 12))
+        try:
+            sanitized["transaction_hour"] = int(hour) % 24
+        except (ValueError, TypeError):
+            sanitized["transaction_hour"] = 12
+
+        if "transaction_date" in payload:
+            sanitized["transaction_date"] = str(payload["transaction_date"])
+        if "transaction_time" in payload:
+            sanitized["transaction_time"] = str(payload["transaction_time"])
+        if "customer_id" in payload:
+            sanitized["customer_id"] = str(payload["customer_id"])
+        if "transaction_id" in payload:
+            sanitized["transaction_id"] = str(payload["transaction_id"])
 
         return ValidationResult(
             is_valid=(len(warnings) == 0),
@@ -172,43 +224,26 @@ class FraudInferenceService:
         graph_features: Optional[Any] = None,
     ) -> LowLatencyInferenceResult:
         """
-        Executes fast, validated inference on a single transaction event.
+        Executes fast, validated inference on a single banking transaction event.
         Guarantees response in <1.0ms without throwing unhandled exceptions.
         """
         t0 = time.perf_counter()
 
         # Step 1: Feature Validation & Sanitization
         val_res = self.validate_features(payload)
+        df_input = pd.DataFrame([val_res.sanitized_features])
 
-        # Step 2: Unified Feature Vector Construction
-        try:
-            vector = UnifiedFraudFeatureBuilder.build_realtime_vector(
-                payload=val_res.sanitized_features,
-                redis_features=redis_features,
-                graph_features=graph_features,
-            )
-            df_input = vector.to_dataframe()
-        except Exception as vec_exc:
-            logger.error(f"Unified vector construction error: {vec_exc}")
-            df_input = pd.DataFrame([val_res.sanitized_features])
-
-        # Step 3: Low-Latency Inference Execution
+        # Step 2: Low-Latency Inference Execution
         fraud_prob = 0.05
         engine_used = self._active_engine
 
         try:
             # Engine 1: ONNX Runtime
-            if self._onnx_session is not None:
+            if self._onnx_session is not None and self._preprocessor is not None:
                 engine_used = "onnx_runtime"
                 input_name = self._onnx_session.get_inputs()[0].name
-                # Prepare float32 numpy tensor
-                if self._preprocessor is not None:
-                    arr_input = self._preprocessor.transform(df_input).astype(np.float32)
-                else:
-                    arr_input = vector.to_numpy().reshape(1, -1).astype(np.float32)
-
+                arr_input = self._preprocessor.transform(df_input).astype(np.float32)
                 ort_outs = self._onnx_session.run(None, {input_name: arr_input})
-                # If ONNX returns probabilities [P(0), P(1)] or raw score
                 if len(ort_outs) > 1 and isinstance(ort_outs[1], list):
                     fraud_prob = float(ort_outs[1][0].get(1, 0.05))
                 elif len(ort_outs) > 0 and hasattr(ort_outs[0], "shape"):
@@ -228,13 +263,15 @@ class FraudInferenceService:
                 probas = self._pipeline.predict_proba(df_input)[:, 1]
                 fraud_prob = float(probas[0])
 
-            # Engine 4: Calibrated Fallback (when models missing)
+            # Engine 4: Calibrated Fallback (when model artifact missing)
             else:
                 engine_used = "fallback_heuristic"
-                # Evaluate based on high-risk features
-                v14 = abs(float(payload.get("v14", payload.get("V14", 0.0))))
-                v12 = abs(float(payload.get("v12", payload.get("V12", 0.0))))
-                fraud_prob = min(0.95, 0.01 + (v14 * 0.08) + (v12 * 0.04))
+                amt = val_res.sanitized_features.get("transaction_amount", 0.0)
+                bal = max(val_res.sanitized_features.get("account_balance", 50000.0), 1.0)
+                ratio = amt / bal
+                hour = val_res.sanitized_features.get("transaction_hour", 12)
+                is_night = 1.0 if (hour < 6 or hour >= 22) else 0.0
+                fraud_prob = min(0.95, 0.008 + (ratio * 0.05) + (is_night * 0.03))
 
         except Exception as pred_exc:
             logger.error(f"Inference prediction error ({engine_used}): {pred_exc}. Using safe baseline.")
@@ -244,19 +281,22 @@ class FraudInferenceService:
         fraud_prob = float(np.clip(fraud_prob, 0.0, 1.0))
         latency_ms = (time.perf_counter() - t0) * 1000.0
 
-        # Step 4: Decision & Risk Synthesis
+        # Step 3: Decision & Risk Synthesis
         if fraud_prob >= settings.high_risk_threshold:
             risk_level = "High"
             decision = "BLOCK"
         elif fraud_prob >= settings.fraud_threshold:
             risk_level = "Medium"
             decision = "REVIEW"
+        elif fraud_prob >= settings.decision_threshold_allow:
+            risk_level = "Medium"
+            decision = "CHALLENGE"
         else:
             risk_level = "Low"
             decision = "ALLOW"
 
-        # Step 5: Fast Top SHAP Driver Explanations
-        shap_drivers = self._extract_top_drivers(val_res.sanitized_features, fraud_prob)
+        # Step 4: TreeSHAP Feature Drivers
+        shap_drivers = self._extract_top_drivers(df_input, fraud_prob)
 
         return LowLatencyInferenceResult(
             fraud_probability=fraud_prob,
@@ -273,29 +313,41 @@ class FraudInferenceService:
 
     def _extract_top_drivers(
         self,
-        features: Dict[str, Any],
+        df_input: pd.DataFrame,
         fraud_prob: float,
     ) -> List[Dict[str, Any]]:
-        """Extracts top predictive feature drivers based on interaction weights and magnitudes."""
+        """Extracts top predictive feature drivers based on TreeSHAP contributions."""
+        try:
+            if self._booster is not None and self._preprocessor is not None:
+                X_trans = self._preprocessor.transform(df_input)
+                feat_names = self._feature_names or [f"f_{j}" for j in range(X_trans.shape[1])]
+                dmat = xgb.DMatrix(X_trans, feature_names=feat_names)
+                contribs = self._booster.predict(dmat, pred_contribs=True)
+                values = contribs[0, :-1]
+
+                paired = sorted(
+                    zip(feat_names, values.tolist()),
+                    key=lambda x: abs(x[1]),
+                    reverse=True,
+                )
+                return [{"feature": name, "shap_value": round(float(val), 4)} for name, val in paired[:5]]
+        except Exception as exc:
+            logger.debug(f"SHAP driver extraction error: {exc}")
+
+        # Fallback interpretable drivers
+        amt = float(df_input.get("transaction_amount", [0.0])[0])
+        bal = float(df_input.get("account_balance", [50000.0])[0])
+        hour = int(df_input.get("transaction_hour", [12])[0])
+        txn_type = str(df_input.get("transaction_type", ["UPI"])[0])
+        channel = str(df_input.get("channel", ["Mobile_App"])[0])
+
         drivers = [
-            {
-                "feature": "V14_V12_interaction",
-                "shap_value": round(float(features.get("V14", 0.0)) * float(features.get("V12", 0.0)), 4),
-            },
-            {
-                "feature": "V14",
-                "shap_value": round(float(features.get("V14", 0.0)), 4),
-            },
-            {
-                "feature": "V12_V10_interaction",
-                "shap_value": round(float(features.get("V12", 0.0)) * float(features.get("V10", 0.0)), 4),
-            },
-            {
-                "feature": "Amount",
-                "shap_value": round(float(features.get("Amount", 0.0)) / 1000.0, 4),
-            },
+            {"feature": "transaction_amount", "shap_value": round(amt / 100000.0, 4)},
+            {"feature": "amount_to_balance_ratio", "shap_value": round(amt / (bal + 1.0), 4)},
+            {"feature": f"transaction_type_{txn_type}", "shap_value": 0.15 if txn_type == "RTGS" else 0.02},
+            {"feature": f"channel_{channel}", "shap_value": 0.08 if channel == "API" else 0.01},
+            {"feature": "is_night_txn", "shap_value": 0.12 if (hour < 6 or hour >= 22) else -0.05},
         ]
-        # Sort by absolute impact
         return sorted(drivers, key=lambda d: abs(d["shap_value"]), reverse=True)[:5]
 
 

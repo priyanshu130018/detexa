@@ -1,8 +1,8 @@
 """
 app/services/fraud_service.py
 ─────────────────────────────────────────────────────────────────────────────
-Credit Card Fraud prediction orchestration, risk scoring, normalized persistence,
-and multi-table atomic transaction management.
+Indian Banking Transaction Fraud prediction orchestration, risk scoring,
+normalized persistence, and multi-table atomic transaction management.
 """
 
 from datetime import datetime, timezone
@@ -19,6 +19,7 @@ from app.core.redis import cache_get, cache_set, cache_delete_pattern
 from app.decision import DecisionContext, get_decision_engine, PostgresDecisionStorage
 from app.feature_store import get_feature_store
 from app.graph import get_graph_service
+from app.services.explanation_service import get_explanation_service
 from app.db.models import (
     AuditLog,
     DecisionType,
@@ -32,7 +33,7 @@ from app.db.models import (
     Transaction,
     AlertStatus,
 )
-from app.ml.models.credit_fraud_model import CreditFraudModel
+from app.ml.models.banking_fraud_model import BankingFraudModel, CreditFraudModel
 
 
 def calculate_risk_level(score: float) -> RiskLevel:
@@ -48,15 +49,17 @@ def calculate_decision(score: float) -> DecisionType:
         return DecisionType.BLOCK
     if score >= settings.fraud_threshold:
         return DecisionType.REVIEW
+    if score >= settings.decision_threshold_allow:
+        return DecisionType.CHALLENGE
     return DecisionType.ALLOW
 
 
 class FraudDetectionService:
     def __init__(self, db: Session):
         self.db = db
-        self._model = CreditFraudModel.get_instance()
+        self._model = BankingFraudModel.get_instance()
 
-    def _get_or_create_merchant(self, name: str, category: str = "General") -> Merchant:
+    def _get_or_create_merchant(self, name: str, category: str = "Retail") -> Merchant:
         merchant = self.db.query(Merchant).filter(Merchant.name == name).first()
         if not merchant:
             merchant = Merchant(
@@ -119,45 +122,51 @@ class FraudDetectionService:
 
     def _get_or_create_model_metadata(self, version: str) -> ModelMetadata:
         model_meta = self.db.query(ModelMetadata).filter(
-            ModelMetadata.model_name == "CreditFraudEnsemble",
+            ModelMetadata.model_name == "IndianBankingFraudXGBoost",
             ModelMetadata.version == version,
         ).first()
         if not model_meta:
             model_meta = ModelMetadata(
                 id=uuid.uuid4(),
-                model_name="CreditFraudEnsemble",
+                model_name="IndianBankingFraudXGBoost",
                 version=version,
-                algorithm="XGBoost + LightGBM + LogisticRegression Stacking",
+                algorithm="XGBoost Classifier (Indian Banking Dataset)",
                 threshold=settings.fraud_threshold,
                 is_active=True,
-                metrics={"auc_pr": 0.88, "f1_score": 0.86, "precision": 0.89, "recall": 0.83},
+                metrics={"auc_roc": 0.54, "auc_pr": 0.02, "f1_score": 0.08},
                 trained_at=datetime.now(timezone.utc),
             )
             self.db.add(model_meta)
             self.db.flush()
         return model_meta
 
-    def predict_credit(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+    def predict_banking(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Executes end-to-end banking fraud scoring, decisioning, and PostgreSQL persistence.
+        """
         t0 = time.perf_counter()
-        input_hash = CreditFraudModel.hash_input(payload)
+        input_hash = BankingFraudModel.hash_input(payload)
 
         # Check Redis cache
-        cached_result = cache_get(f"pred:credit:{input_hash}")
+        cached_result = cache_get(f"pred:banking:{input_hash}")
         if cached_result:
             logger.debug(f"Redis cache hit for prediction {input_hash[:8]}")
             return cached_result
 
+        raw_amt = payload.get("transaction_amount", payload.get("amount", payload.get("Amount", 0.0)))
+        amt_val = float(raw_amt) if raw_amt is not None else 0.0
+        
+        customer_id_str = str(payload.get("customer_id", payload.get("user_id", ""))) if (payload.get("customer_id") or payload.get("user_id")) else None
         user_id_str = str(payload.get("user_id", "")) if payload.get("user_id") else None
         merchant_name = payload.get("merchant", "Online Merchant")
-        category_name = payload.get("category", "General")
-        country_name = payload.get("country", "US")
+        category_name = payload.get("merchant_category", payload.get("category", "Retail"))
+        country_name = payload.get("country", "IN")
         device_fp = payload.get("device_fingerprint")
         user_agent_str = payload.get("user_agent")
         ip_addr_str = payload.get("ip_address")
-        amt_val = float(payload.get("amount", payload.get("Amount", 0.0)))
 
         # 1. Fetch Real-time Sliding Window Features (Redis) & Graph Risk (Neo4j)
-        user_key = user_id_str or f"TXN-{uuid.uuid4().hex[:8].upper()}"
+        user_key = customer_id_str or user_id_str or f"CUST-{uuid.uuid4().hex[:8].upper()}"
         fs = get_feature_store()
         redis_hot = fs.get_hot_features(
             user_key=user_key,
@@ -175,21 +184,21 @@ class FraudDetectionService:
             current_ip=ip_addr_str,
         )
 
-        # 2. Low-Latency ML Model Scoring
+        # 2. Low-Latency ML Model Scoring with TreeSHAP
         fraud_score, shap_features = self._model.predict(payload)
 
         # 3. Decision Engine Policy Evaluation
         txn_id = uuid.uuid4()
-        txn_ref = f"TXN-{uuid.uuid4().hex[:10].upper()}"
+        txn_ref = payload.get("transaction_id") or f"TXN-{uuid.uuid4().hex[:10].upper()}"
 
         ctx = DecisionContext(
             fraud_score=fraud_score,
             amount=amt_val,
-            currency=payload.get("currency", "USD"),
+            currency=payload.get("currency", "INR"),
             merchant=merchant_name,
             category=category_name,
             country=country_name,
-            user_id=user_id_str,
+            user_id=user_key,
             transaction_ref=txn_ref,
             device_fingerprint=device_fp,
             ip_address=ip_addr_str,
@@ -216,46 +225,70 @@ class FraudDetectionService:
             txn = Transaction(
                 id=txn_id,
                 transaction_ref=txn_ref,
+                customer_id=customer_id_str,
                 user_id=user_id_val,
                 merchant_id=merchant.id,
                 device_id=device.id if device else None,
                 ip_id=ip_obj.id if ip_obj else None,
                 amount=amt_val,
-                currency=payload.get("currency", "USD"),
+                transaction_amount=amt_val,
+                currency=payload.get("currency", "INR"),
                 merchant=merchant.name,
-                category=merchant.category,
+                category=category_name,
+                merchant_category=category_name,
                 country=country_name,
+                account_type=str(payload.get("account_type", "Savings")),
+                transaction_type=str(payload.get("transaction_type", "UPI")),
+                transaction_direction=str(payload.get("transaction_direction", "Debit")),
+                account_balance=float(payload.get("account_balance", 50000.0)),
+                state=str(payload.get("state", "Maharashtra")),
+                credit_score=int(payload.get("credit_score", 650)),
+                has_loan=int(payload.get("has_loan", 0)),
+                loan_type=str(payload.get("loan_type", "None")),
+                emi_amount=float(payload.get("emi_amount", 0.0)),
+                transaction_status=str(payload.get("transaction_status", "Success")),
+                channel=str(payload.get("channel", "Mobile_App")),
+                kyc_status=str(payload.get("kyc_status", "Verified")),
+                transaction_hour=int(payload.get("transaction_hour", 12)) if payload.get("transaction_hour") is not None else 12,
+                transaction_date=str(payload.get("transaction_date", datetime.now(timezone.utc).strftime("%Y-%m-%d"))),
+                transaction_time=str(payload.get("transaction_time", datetime.now(timezone.utc).strftime("%H:%M"))),
                 fraud_score=round(fraud_score, 4),
                 risk_level=RiskLevel(decision_outcome.risk_level),
                 is_fraud=(decision_outcome.decision.value == "BLOCK"),
                 label=int(decision_outcome.decision.value == "BLOCK"),
                 timestamp=datetime.now(timezone.utc),
             )
-            for i in range(1, 29):
-                k = f"v{i}"
-                setattr(txn, k, payload.get(k, payload.get(k.upper(), 0.0)))
 
             self.db.add(txn)
             self.db.flush()
+
+            # 3.5 Generate AI/SHAP natural language fraud explanation
+            explanation = get_explanation_service().generate_explanation(
+                fraud_score=fraud_score,
+                risk_level=decision_outcome.risk_level,
+                decision=decision_outcome.decision.value,
+                shap_features=shap_features,
+                transaction_data=payload,
+            )
 
             # Persist Decision, Prediction audit, and Alerts
             PostgresDecisionStorage.persist_decision(
                 db=self.db,
                 outcome=decision_outcome,
                 txn=txn,
-                endpoint="/api/v1/predict/credit",
+                endpoint="/api/v1/predict/transaction",
                 input_hash=input_hash,
                 latency_ms=latency_ms,
                 shap_drivers=shap_features[:settings.shap_top_k_features] if shap_features else None,
-                model_version=CreditFraudModel.MODEL_VERSION,
+                explanation=explanation,
+                model_version=BankingFraudModel.MODEL_VERSION,
             )
 
             self.db.commit()
 
-
         except Exception as exc:
             self.db.rollback()
-            logger.error(f"Transaction rollback during credit fraud evaluation: {exc}")
+            logger.error(f"Transaction rollback during banking fraud evaluation: {exc}")
             raise HTTPException(
                 status_code=500,
                 detail=f"Database transaction failure during fraud evaluation: {str(exc)}",
@@ -265,7 +298,6 @@ class FraudDetectionService:
         cache_delete_pattern("stats:*")
 
         # Ingest into Redis Feature Store for real-time sliding window calculations
-        user_key = str(user_id_val) if user_id_val else txn_ref
         try:
             fs = get_feature_store()
             fs.ingest_transaction(
@@ -276,7 +308,7 @@ class FraudDetectionService:
                 country=country_name,
                 device_fingerprint=device_fp,
                 ip_address=ip_addr_str,
-                is_failed=False,
+                is_failed=(payload.get("transaction_status") == "Failed"),
             )
             fs.record_risk_decision(
                 user_key=user_key,
@@ -286,7 +318,7 @@ class FraudDetectionService:
         except Exception as fs_exc:
             logger.debug(f"Non-critical feature store ingestion error: {fs_exc}")
 
-        # Ingest into Neo4j Graph Database for entity relationship and fraud ring analysis
+        # Ingest into Neo4j Graph Database
         try:
             gs = get_graph_service()
             gs.sync_transaction(
@@ -318,15 +350,18 @@ class FraudDetectionService:
             "reason_codes": decision_outcome.reason_codes,
             "requires_step_up_auth": decision_outcome.requires_step_up_auth,
             "shap_top_features": shap_features[:settings.shap_top_k_features] if shap_features else None,
-            "model_version": CreditFraudModel.MODEL_VERSION,
+            "explanation": explanation,
+            "model_version": BankingFraudModel.MODEL_VERSION,
             "latency_ms": round(latency_ms, 2),
         }
 
         # Cache response in Redis
-        cache_set(f"pred:credit:{input_hash}", response_payload, ttl_seconds=settings.redis_cache_ttl_predictions)
+        cache_set(f"pred:banking:{input_hash}", response_payload, ttl_seconds=settings.redis_cache_ttl_predictions)
 
         return response_payload
 
+    # Backward compatibility alias
+    predict_credit = predict_banking
 
     def predict_batch(self, payloads: List[Dict[str, Any]]) -> Dict[str, Any]:
         if len(payloads) > settings.batch_inference_max_rows:
@@ -340,7 +375,7 @@ class FraudDetectionService:
         fraud_count = 0
 
         for item in payloads:
-            res = self.predict_credit(item)
+            res = self.predict_banking(item)
             if res["is_fraud"]:
                 fraud_count += 1
             results.append(res)

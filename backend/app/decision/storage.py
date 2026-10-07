@@ -37,6 +37,7 @@ class PostgresDecisionStorage:
         input_hash: Optional[str] = None,
         latency_ms: float = 0.0,
         shap_drivers: Optional[List[Dict[str, Any]]] = None,
+        explanation: Optional[Dict[str, Any]] = None,
         model_version: str = "2.0.0",
     ) -> FraudPrediction:
         """
@@ -74,6 +75,17 @@ class PostgresDecisionStorage:
 
         # 3. Create FraudAlert for Non-ALLOW Decisions (BLOCK, REVIEW, CHALLENGE)
         if outcome.decision != DecisionAction.ALLOW:
+            alert_meta = {
+                "decision": outcome.decision.value,
+                "reason_codes": outcome.reason_codes,
+                "requires_step_up_auth": outcome.requires_step_up_auth,
+                "triggered_rules": [r.rule_id for r in outcome.rules_triggered],
+                "merchant": txn.merchant,
+                "amount": txn.amount,
+            }
+            if explanation:
+                alert_meta["explanation"] = explanation
+
             alert = FraudAlert(
                 id=uuid.uuid4(),
                 user_id=txn.user_id,
@@ -85,14 +97,7 @@ class PostgresDecisionStorage:
                 description=f"[{outcome.decision.value}] {outcome.primary_reason}",
                 status=AlertStatus.OPEN,
                 shap_values=shap_drivers,
-                metadata_={
-                    "decision": outcome.decision.value,
-                    "reason_codes": outcome.reason_codes,
-                    "requires_step_up_auth": outcome.requires_step_up_auth,
-                    "triggered_rules": [r.rule_id for r in outcome.rules_triggered],
-                    "merchant": txn.merchant,
-                    "amount": txn.amount,
-                },
+                metadata_=alert_meta,
                 created_at=datetime.now(timezone.utc),
             )
             db.add(alert)

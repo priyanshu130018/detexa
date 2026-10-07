@@ -17,7 +17,7 @@ def export_pipeline_to_onnx(
     """
     Exports a trained scikit-learn / XGBoost pipeline to ONNX format if onnxmltools/skl2onnx is present.
     """
-    out_file = Path(output_path or "app/ml/saved/credit_fraud_model.onnx")
+    out_file = Path(output_path or "app/ml/saved/banking_fraud_model.onnx")
     out_file.parent.mkdir(parents=True, exist_ok=True)
 
     try:

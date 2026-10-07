@@ -10,10 +10,10 @@ from fastapi.testclient import TestClient
 
 @pytest.mark.api
 class TestPredictAPI:
-    def test_predict_credit_single_normal(self, client: TestClient, auth_headers: dict, sample_credit_transaction_payload):
+    def test_predict_banking_single_normal(self, client: TestClient, auth_headers: dict, sample_banking_transaction_payload):
         resp = client.post(
-            "/api/v1/predict/credit",
-            json=sample_credit_transaction_payload,
+            "/api/v1/predict/transaction",
+            json=sample_banking_transaction_payload,
             headers=auth_headers,
         )
         assert resp.status_code == 200
@@ -24,15 +24,27 @@ class TestPredictAPI:
         assert 0.0 <= data["fraud_score"] <= 1.0
         assert data["decision"] in ("ALLOW", "CHALLENGE", "REVIEW", "BLOCK")
 
-    def test_predict_credit_batch(self, client: TestClient, auth_headers: dict):
+    def test_predict_banking_batch(self, client: TestClient, auth_headers: dict):
         batch = {
             "transactions": [
-                {"amount": 40.0, "v1": 0.0, "v2": 0.0},
-                {"amount": 8000.0, "v1": -4.0, "v2": 3.5},
+                {
+                    "customer_id": "CUST_1001",
+                    "transaction_amount": 450.0,
+                    "account_balance": 25000.0,
+                    "channel": "Mobile Banking",
+                    "transaction_type": "UPI",
+                },
+                {
+                    "customer_id": "CUST_9999",
+                    "transaction_amount": 800000.0,
+                    "account_balance": 500.0,
+                    "channel": "Net Banking",
+                    "transaction_type": "IMPS",
+                },
             ]
         }
         resp = client.post(
-            "/api/v1/predict/credit/batch",
+            "/api/v1/predict/transaction/batch",
             json=batch,
             headers=auth_headers,
         )
@@ -54,11 +66,11 @@ class TestPredictAPI:
         assert "risk_factors" in data
         assert 0.0 <= data["anomaly_score"] <= 1.0
 
-    def test_predict_credit_validation_error(self, client: TestClient, auth_headers: dict):
+    def test_predict_banking_validation_error(self, client: TestClient, auth_headers: dict):
         # Negative amount
         resp = client.post(
-            "/api/v1/predict/credit",
-            json={"amount": -50.0},
+            "/api/v1/predict/transaction",
+            json={"transaction_amount": -50.0},
             headers=auth_headers,
         )
         assert resp.status_code in [400, 422]

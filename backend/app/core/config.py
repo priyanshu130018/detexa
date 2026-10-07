@@ -18,6 +18,7 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
+        protected_namespaces=(),
     )
 
     # ── 1. Application & Runtime Settings ────────────────────────────────────
@@ -123,7 +124,8 @@ class Settings(BaseSettings):
 
     # ── 9. ML Models & Inference Thresholds ──────────────────────────────────
     model_path: str = Field(default="app/ml/saved", description="Directory path holding serialized .pkl model pipelines")
-    credit_model_filename: str = Field(default="credit_fraud_pipeline.pkl", description="Credit fraud classifier filename")
+    banking_model_filename: str = Field(default="banking_fraud_pipeline.pkl", description="Banking fraud classifier filename")
+    credit_model_filename: str = Field(default="banking_fraud_pipeline.pkl", description="Legacy alias for fraud classifier filename")
     behavior_model_filename: str = Field(default="behavior_pipeline.pkl", description="Behavior anomaly pipeline filename")
     fraud_threshold: float = Field(default=0.50, description="Fraud probability threshold for MEDIUM risk / alert flag")
     high_risk_threshold: float = Field(default=0.75, description="Fraud probability threshold for HIGH risk")
@@ -144,6 +146,12 @@ class Settings(BaseSettings):
     rule_enable_device_change_challenge: bool = Field(default=True, description="Enforce CHALLENGE on new device for large txns")
     rule_enable_ip_hopping_challenge: bool = Field(default=True, description="Enforce CHALLENGE on IP hopping")
     rule_off_peak_night_threshold: float = Field(default=500.0, description="Nocturnal transaction limit triggering CHALLENGE")
+
+    # ── 11. Groq LLM Explanation Layer ───────────────────────────────────────
+    groq_api_key: Optional[str] = Field(default=None, description="Groq API key for natural language fraud explanations")
+    groq_model: str = Field(default="openai/gpt-oss-20b", description="Groq LLM model name")
+    groq_timeout_seconds: float = Field(default=4.0, description="HTTP request timeout for Groq API calls")
+    groq_max_retries: int = Field(default=1, description="Max retries for Groq API call")
 
     # ── Validators ───────────────────────────────────────────────────────────
 

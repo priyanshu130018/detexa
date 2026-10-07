@@ -71,6 +71,19 @@ def list_alerts(
 
 
 @router.get(
+    "/stats",
+    response_model=DashboardStats,
+    summary="Alerts & Dashboard Statistics",
+    description="Retrieve high-level dashboard metrics, fraud counts, and open alerts.",
+)
+def get_alerts_stats(
+    alert_svc: AlertService = Depends(get_alert_service),
+    _: User = Depends(get_current_user),
+) -> DashboardStats:
+    return alert_svc.get_dashboard_stats()
+
+
+@router.get(
     "/{alert_id}",
     response_model=AlertDetailOut,
     summary="Get Alert by ID",
@@ -82,19 +95,6 @@ def get_alert(
     _: User = Depends(get_current_user),
 ) -> AlertDetailOut:
     return alert_svc.get_alert_by_id(alert_id)
-
-
-@router.get(
-    "/stats",
-    response_model=DashboardStats,
-    summary="Alerts & Dashboard Statistics",
-    description="Retrieve high-level dashboard metrics, fraud counts, and open alerts.",
-)
-def get_alerts_stats(
-    alert_svc: AlertService = Depends(get_alert_service),
-    _: User = Depends(get_current_user),
-) -> DashboardStats:
-    return alert_svc.get_dashboard_stats()
 
 
 @router.patch(

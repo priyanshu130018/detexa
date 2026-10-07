@@ -5,32 +5,75 @@ Unit tests for Machine Learning models and inference wrappers.
 """
 
 import pytest
-from app.ml.models.credit_fraud_model import CreditFraudModel
+from app.ml.models.banking_fraud_model import BankingFraudModel
 from app.ml.models.behavior_model import BehaviorAnomalyModel
 
 
 @pytest.mark.unit
 class TestMLModelsUnit:
-    def test_credit_fraud_model_singleton_and_loading(self):
-        model1 = CreditFraudModel.get_instance()
-        model2 = CreditFraudModel.get_instance()
+    def test_banking_fraud_model_singleton_and_loading(self):
+        model1 = BankingFraudModel.get_instance()
+        model2 = BankingFraudModel.get_instance()
         assert model1 is model2
         assert model1.MODEL_VERSION == "2.0.0"
 
-    def test_credit_fraud_model_prediction_range(self):
-        model = CreditFraudModel.get_instance()
-        payload = {"amount": 100.0, "v1": 0.0, "v2": 0.0}
+    def test_banking_fraud_model_prediction_range(self):
+        model = BankingFraudModel.get_instance()
+        payload = {
+            "customer_id": "CUST_1001",
+            "account_type": "Savings",
+            "transaction_type": "UPI",
+            "transaction_amount": 1500.0,
+            "transaction_direction": "Debit",
+            "account_balance": 25000.0,
+            "merchant_category": "Electronics",
+            "state": "Maharashtra",
+            "credit_score": 720,
+            "has_loan": False,
+            "loan_type": "None",
+            "emi_amount": 0.0,
+            "transaction_status": "Completed",
+            "channel": "Mobile Banking",
+            "kyc_status": "Verified",
+            "transaction_hour": 14,
+            "transaction_date": "2026-10-07",
+            "transaction_time": "14:30:00",
+        }
         score, shap_drivers = model.predict(payload)
         assert 0.0 <= score <= 1.0
         assert isinstance(score, float)
         if shap_drivers is not None:
             assert isinstance(shap_drivers, list)
 
-    def test_credit_fraud_batch_prediction(self):
-        model = CreditFraudModel.get_instance()
+    def test_banking_fraud_batch_prediction(self):
+        model = BankingFraudModel.get_instance()
         payloads = [
-            {"amount": 25.0, "v1": 0.1, "v2": -0.1},
-            {"amount": 5000.0, "v1": -3.5, "v2": 4.0},
+            {
+                "customer_id": "CUST_1001",
+                "account_type": "Savings",
+                "transaction_type": "UPI",
+                "transaction_amount": 250.0,
+                "account_balance": 15000.0,
+                "merchant_category": "Grocery",
+                "state": "Karnataka",
+                "credit_score": 780,
+                "channel": "Mobile Banking",
+                "kyc_status": "Verified",
+                "transaction_hour": 10,
+            },
+            {
+                "customer_id": "CUST_9999",
+                "account_type": "Current",
+                "transaction_type": "IMPS",
+                "transaction_amount": 450000.0,
+                "account_balance": 1000.0,
+                "merchant_category": "Jewellery",
+                "state": "Maharashtra",
+                "credit_score": 500,
+                "channel": "Net Banking",
+                "kyc_status": "Pending",
+                "transaction_hour": 3,
+            },
         ]
         results = model.predict_batch(payloads)
         assert len(results) == 2

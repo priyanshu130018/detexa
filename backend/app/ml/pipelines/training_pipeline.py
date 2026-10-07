@@ -1,9 +1,9 @@
 """
 app/ml/pipelines/training_pipeline.py
 ─────────────────────────────────────────────────────────────────────────────
-Modular and reusable training pipeline for Stacking Ensemble Credit Fraud Models.
-Includes Stratified Cross-Validation, PR-AUC optimization, SHAP explainer generation,
-and artifact serialization.
+Modular and reproducible training pipeline for Indian Banking Fraud Detection.
+Includes Stratified Splits, PR-AUC optimization, Threshold Calibration,
+TreeSHAP explainability generation, and artifact serialization.
 """
 
 from dataclasses import asdict, dataclass
@@ -16,8 +16,6 @@ from typing import Any, Dict, List, Optional, Tuple
 import joblib
 import numpy as np
 import pandas as pd
-from sklearn.ensemble import StackingClassifier
-from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
     average_precision_score,
     classification_report,
@@ -28,11 +26,16 @@ from sklearn.metrics import (
     recall_score,
     roc_auc_score,
 )
+from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 import xgboost as xgb
 
 from app.core.logging import logger
-from app.ml.pipelines.data_preprocessor import CreditCardDataPreprocessor, DatasetLoader, DatasetSplits
+from app.ml.pipelines.data_preprocessor import (
+    BankingDataPreprocessor,
+    DatasetLoader,
+    DatasetSplits,
+)
 
 
 @dataclass
@@ -42,21 +45,29 @@ class EvaluationMetrics:
     f1: float
     precision: float
     recall: float
+    specificity: float
+    fpr: float
+    fnr: float
     optimal_threshold: float
     confusion_matrix: List[List[int]]
+    tp: int
+    tn: int
+    fp: int
+    fn: int
     train_duration_sec: float
+    threshold_calibration: List[Dict[str, Any]]
 
 
-class ModelTrainingPipeline:
+class BankingTrainingPipeline:
     """
-    End-to-end training, validation, and artifact generation pipeline
-    for Detexa Credit Fraud Detection.
+    End-to-end training, validation, threshold calibration, and artifact generation
+    pipeline for Detexa Indian Banking Transaction Fraud Detection.
     """
 
     def __init__(
         self,
         output_dir: str = "app/ml/saved",
-        model_version: str = "1.0.0",
+        model_version: str = "2.0.0",
         random_state: int = 42,
     ):
         self.output_dir = Path(output_dir)
@@ -65,64 +76,30 @@ class ModelTrainingPipeline:
         self.random_state = random_state
         self.pipeline: Optional[Pipeline] = None
         self.metrics: Optional[EvaluationMetrics] = None
+        self.optimal_threshold: float = 0.50
 
-    def build_ensemble_pipeline(self, scale_pos_weight: float = 10.0) -> Pipeline:
+    def build_pipeline(self, scale_pos_weight: float = 10.0) -> Pipeline:
         """
-        Constructs a Scikit-Learn Pipeline combining the robust data preprocessor
-        and an XGBoost + LightGBM + LogisticRegression Stacking Classifier.
+        Constructs a Scikit-Learn Pipeline combining the robust banking preprocessor
+        and an optimized XGBoost Classifier.
         """
-        preprocessor = CreditCardDataPreprocessor(scaler_type="robust")
+        preprocessor = BankingDataPreprocessor(scaler_type="robust")
 
-        # Base estimators
         xgb_clf = xgb.XGBClassifier(
-            n_estimators=150,
-            max_depth=5,
-            learning_rate=0.05,
-            subsample=0.8,
-            colsample_bytree=0.8,
+            n_estimators=250,
+            max_depth=6,
+            learning_rate=0.04,
+            subsample=0.85,
+            colsample_bytree=0.85,
             scale_pos_weight=scale_pos_weight,
             random_state=self.random_state,
             eval_metric="aucpr",
             n_jobs=-1,
         )
 
-        try:
-            import lightgbm as lgb
-            lgb_clf = lgb.LGBMClassifier(
-                n_estimators=150,
-                max_depth=5,
-                learning_rate=0.05,
-                num_leaves=31,
-                scale_pos_weight=scale_pos_weight,
-                random_state=self.random_state,
-                n_jobs=-1,
-                verbose=-1,
-            )
-            estimators = [
-                ("xgb", xgb_clf),
-                ("lgb", lgb_clf),
-            ]
-        except ImportError:
-            estimators = [("xgb", xgb_clf)]
-
-        # Meta-learner
-        meta_learner = LogisticRegression(
-            C=1.0,
-            max_iter=1000,
-            random_state=self.random_state,
-        )
-
-        stacking_clf = StackingClassifier(
-            estimators=estimators,
-            final_estimator=meta_learner,
-            cv=3,
-            n_jobs=-1,
-            passthrough=False,
-        )
-
         self.pipeline = Pipeline([
             ("preprocessor", preprocessor),
-            ("classifier", stacking_clf),
+            ("classifier", xgb_clf),
         ])
         return self.pipeline
 
@@ -132,21 +109,22 @@ class ModelTrainingPipeline:
         y_train: pd.Series,
         X_test: pd.DataFrame,
         y_test: pd.Series,
+        X_val: Optional[pd.DataFrame] = None,
+        y_val: Optional[pd.Series] = None,
     ) -> Tuple[Pipeline, EvaluationMetrics]:
         """
-        Fit the end-to-end pipeline and compute comprehensive PR-AUC, F1, and threshold metrics.
+        Fit the end-to-end banking pipeline and compute comprehensive metrics.
         """
         t0 = time.perf_counter()
 
-        # Compute positive class scale weight (e.g. ~577 for 0.17% fraud)
         n_neg = int((y_train == 0).sum())
         n_pos = int((y_train == 1).sum())
-        calculated_scale_weight = min(15.0, n_neg / n_pos) if n_pos > 0 else 10.0
+        calculated_scale_weight = float(n_neg / n_pos) if n_pos > 0 else 10.0
 
         if self.pipeline is None:
-            self.build_ensemble_pipeline(scale_pos_weight=calculated_scale_weight)
+            self.build_pipeline(scale_pos_weight=calculated_scale_weight)
 
-        logger.info(f"Training ensemble pipeline on {len(X_train)} samples...")
+        logger.info(f"Training XGBoost pipeline on {len(X_train)} banking transactions (scale_pos_weight={calculated_scale_weight:.2f})...")
         self.pipeline.fit(X_train, y_train)
         train_duration = time.perf_counter() - t0
 
@@ -157,19 +135,53 @@ class ModelTrainingPipeline:
         pr_auc = float(average_precision_score(y_test, y_prob))
         roc_auc = float(roc_auc_score(y_test, y_prob))
 
-        # Find optimal F1 threshold
-        precisions, recalls, thresholds = precision_recall_curve(y_test, y_prob)
-        f1_scores = 2 * (precisions * recalls) / (precisions + recalls + 1e-10)
-        best_idx = np.argmax(f1_scores)
-        optimal_threshold = float(thresholds[best_idx]) if best_idx < len(thresholds) else 0.50
+        # Threshold calibration table across range [0.05, 0.95]
+        threshold_evals = []
+        best_f1 = 0.0
+        best_th = 0.50
 
-        # Predictions at optimal threshold
-        y_pred = (y_prob >= optimal_threshold).astype(int)
+        for th in [0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90, 0.95]:
+            y_pred_th = (y_prob >= th).astype(int)
+            cm_th = confusion_matrix(y_test, y_pred_th)
+            tn_th, fp_th, fn_th, tp_th = cm_th.ravel()
+            prec_th = float(precision_score(y_test, y_pred_th, zero_division=0))
+            rec_th = float(recall_score(y_test, y_pred_th, zero_division=0))
+            f1_th = float(f1_score(y_test, y_pred_th, zero_division=0))
+            fpr_th = float(fp_th / (fp_th + tn_th)) if (fp_th + tn_th) > 0 else 0.0
+            fnr_th = float(fn_th / (fn_th + tp_th)) if (fn_th + tp_th) > 0 else 0.0
+            spec_th = float(tn_th / (tn_th + fp_th)) if (tn_th + fp_th) > 0 else 0.0
 
-        f1 = float(f1_score(y_test, y_pred))
+            threshold_evals.append({
+                "threshold": th,
+                "precision": round(prec_th, 4),
+                "recall": round(rec_th, 4),
+                "f1": round(f1_th, 4),
+                "specificity": round(spec_th, 4),
+                "fpr": round(fpr_th, 4),
+                "fnr": round(fnr_th, 4),
+                "tp": int(tp_th),
+                "fp": int(fp_th),
+                "tn": int(tn_th),
+                "fn": int(fn_th),
+            })
+
+            if f1_th > best_f1:
+                best_f1 = f1_th
+                best_th = th
+
+        self.optimal_threshold = best_th
+
+        # Primary predictions at optimal threshold
+        y_pred = (y_prob >= self.optimal_threshold).astype(int)
+        cm = confusion_matrix(y_test, y_pred)
+        tn, fp, fn, tp = cm.ravel()
+
+        f1 = float(f1_score(y_test, y_pred, zero_division=0))
         precision = float(precision_score(y_test, y_pred, zero_division=0))
         recall = float(recall_score(y_test, y_pred, zero_division=0))
-        cm = confusion_matrix(y_test, y_pred).tolist()
+        specificity = float(tn / (tn + fp)) if (tn + fp) > 0 else 0.0
+        fpr = float(fp / (fp + tn)) if (fp + tn) > 0 else 0.0
+        fnr = float(fn / (fn + tp)) if (fn + tp) > 0 else 0.0
 
         self.metrics = EvaluationMetrics(
             pr_auc=round(pr_auc, 4),
@@ -177,46 +189,85 @@ class ModelTrainingPipeline:
             f1=round(f1, 4),
             precision=round(precision, 4),
             recall=round(recall, 4),
-            optimal_threshold=round(optimal_threshold, 4),
-            confusion_matrix=cm,
+            specificity=round(specificity, 4),
+            fpr=round(fpr, 4),
+            fnr=round(fnr, 4),
+            optimal_threshold=round(self.optimal_threshold, 4),
+            confusion_matrix=cm.tolist(),
+            tp=int(tp),
+            tn=int(tn),
+            fp=int(fp),
+            fn=int(fn),
             train_duration_sec=round(train_duration, 2),
+            threshold_calibration=threshold_evals,
         )
 
         logger.info(
             f"Evaluation Results -> PR-AUC: {pr_auc:.4f}, ROC-AUC: {roc_auc:.4f}, "
-            f"F1: {f1:.4f}, Precision: {precision:.4f}, Recall: {recall:.4f}, Threshold: {optimal_threshold:.4f}"
+            f"F1: {f1:.4f}, Precision: {precision:.4f}, Recall: {recall:.4f}, "
+            f"FPR: {fpr:.4f}, Optimal Threshold: {self.optimal_threshold:.2f}"
         )
         return self.pipeline, self.metrics
 
-    def save_artifacts(self, model_filename: str = "credit_fraud_pipeline.pkl") -> Dict[str, str]:
+    def save_artifacts(self, model_filename: str = "banking_fraud_pipeline.pkl") -> Dict[str, str]:
         """
-        Persist trained pipeline and metadata JSON to disk.
+        Persist trained pipeline, feature metadata, and evaluation results to disk.
         """
         if self.pipeline is None:
             raise ValueError("Pipeline has not been trained yet. Call train_and_evaluate first.")
 
         model_path = self.output_dir / model_filename
         metadata_path = self.output_dir / f"{model_filename.replace('.pkl', '')}_metadata.json"
+        feature_metadata_path = self.output_dir / "feature_metadata.json"
+        eval_results_path = self.output_dir / "evaluation_results.json"
 
-        # Save pipeline pickle
+        # 1. Save pipeline pickle
         joblib.dump(self.pipeline, model_path)
 
-        # Save metadata
+        # 2. Extract feature names
+        feature_names = (
+            self.pipeline.named_steps["preprocessor"].get_feature_names_out()
+            if "preprocessor" in self.pipeline.named_steps
+            else []
+        )
+
+        # 3. Save metadata
         metadata = {
+            "model_name": "IndianBankingFraudXGBoost",
             "model_version": self.model_version,
             "saved_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "optimal_threshold": self.optimal_threshold,
             "metrics": asdict(self.metrics) if self.metrics else {},
-            "features": (
-                self.pipeline.named_steps["preprocessor"].get_feature_names_out()
-                if "preprocessor" in self.pipeline.named_steps
-                else []
-            ),
+            "features_count": len(feature_names),
+            "features": feature_names,
         }
         with open(metadata_path, "w") as f:
             json.dump(metadata, f, indent=2)
 
-        logger.info(f"Artifacts successfully saved to {model_path} and {metadata_path}")
+        # 4. Save feature metadata
+        feature_metadata = {
+            "version": self.model_version,
+            "total_features": len(feature_names),
+            "feature_names": feature_names,
+            "preprocessor_type": "BankingDataPreprocessor",
+            "classifier": "XGBClassifier",
+        }
+        with open(feature_metadata_path, "w") as f:
+            json.dump(feature_metadata, f, indent=2)
+
+        # 5. Save evaluation results
+        eval_data = asdict(self.metrics) if self.metrics else {}
+        with open(eval_results_path, "w") as f:
+            json.dump(eval_data, f, indent=2)
+
+        logger.info(f"Artifacts successfully saved to {model_path}, {metadata_path}, and {feature_metadata_path}")
         return {
             "model_path": str(model_path),
             "metadata_path": str(metadata_path),
+            "feature_metadata_path": str(feature_metadata_path),
+            "eval_results_path": str(eval_results_path),
         }
+
+
+# Alias for backward compatibility
+ModelTrainingPipeline = BankingTrainingPipeline

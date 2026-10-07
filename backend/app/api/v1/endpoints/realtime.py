@@ -16,6 +16,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.core.realtime_broadcaster import get_realtime_broadcaster, RealtimeBroadcaster
+from app.core.security import decode_token
 
 router = APIRouter(tags=["Real-Time Event Stream"])
 
@@ -34,6 +35,26 @@ async def websocket_events_endpoint(
       - status_change
       - heartbeat
     """
+    # ── WebSocket Authentication ───────────────────────────────────────────────
+    auth_token = token
+    if not auth_token:
+        auth_header = websocket.headers.get("authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            auth_token = auth_header.split(" ", 1)[1]
+        elif not auth_token:
+            protocols = websocket.headers.get("sec-websocket-protocol", "").split(",")
+            for p in protocols:
+                p = p.strip()
+                if p.lower().startswith("bearer."):
+                    auth_token = p.split(".", 1)[1]
+                    break
+
+    if auth_token:
+        payload = decode_token(auth_token)
+        if not payload:
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Invalid authentication token")
+            return
+
     broadcaster = get_realtime_broadcaster()
     # Set event loop reference on connect
     try:
@@ -45,7 +66,7 @@ async def websocket_events_endpoint(
 
     try:
         while True:
-            # Listen for client ping or channel subscriptions
+            # Listen for client ping, subscriptions, or in-band auth
             raw_text = await websocket.receive_text()
             try:
                 msg = json.loads(raw_text)
@@ -68,6 +89,27 @@ async def websocket_events_endpoint(
                             "timestamp": datetime.now(timezone.utc).isoformat(),
                         },
                     )
+                elif action in ("auth", "authenticate"):
+                    msg_token = msg.get("token") or msg.get("access_token")
+                    if msg_token and decode_token(msg_token):
+                        await broadcaster.send_personal_ws(
+                            websocket,
+                            {
+                                "event": "authenticated",
+                                "status": "success",
+                                "timestamp": datetime.now(timezone.utc).isoformat(),
+                            },
+                        )
+                    else:
+                        await broadcaster.send_personal_ws(
+                            websocket,
+                            {
+                                "event": "auth_error",
+                                "status": "failed",
+                                "message": "Invalid authentication token",
+                                "timestamp": datetime.now(timezone.utc).isoformat(),
+                            },
+                        )
             except json.JSONDecodeError:
                 pass
     except WebSocketDisconnect:
