@@ -153,8 +153,8 @@ class FraudDetectionService:
             logger.debug(f"Redis cache hit for prediction {input_hash[:8]}")
             return cached_result
 
-        raw_amt = payload.get("transaction_amount", payload.get("amount", payload.get("Amount", 0.0)))
-        amt_val = float(raw_amt) if raw_amt is not None else 0.0
+        raw_amt = payload.get("transaction_amount") or payload.get("amount") or payload.get("Amount") or 1.0
+        amt_val = float(raw_amt)
         
         customer_id_str = str(payload.get("customer_id", payload.get("user_id", ""))) if (payload.get("customer_id") or payload.get("user_id")) else None
         user_id_str = str(payload.get("user_id", "")) if payload.get("user_id") else None

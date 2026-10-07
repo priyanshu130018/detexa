@@ -131,6 +131,8 @@ class FraudAlertEvent(BaseModel):
 
 class DeadLetterEvent(BaseModel):
     header: EventHeader
-    failed_payload: Dict[str, Any]
+    failed_topic: Optional[str] = None
+    failed_payload: Optional[Dict[str, Any]] = None
+    raw_payload: Optional[str] = None
     error_message: str
     retry_count: int = 0

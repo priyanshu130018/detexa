@@ -60,6 +60,7 @@ Detexa utilizes a modern **event-driven, lambda-inspired microservices architect
 ### 2.1 FastAPI Gateway & Core API
 - **Technology:** FastAPI, Pydantic v2, SQLAlchemy 2.0, Uvicorn (ASGI).
 - **Purpose:** High-performance RESTful API gateway serving transaction ingestion, prediction endpoints, security alerts, and system health checks.
+- **Auth Performance Optimization:** Validated user auth profiles are cached in Redis (`auth:user:{user_id}`) with a 60-second TTL to avoid WAN database roundtrips during JWT authentication while preserving cryptographic token verification.
 - **Why it exists:** FastAPI leverages Python asynchronous programming (`async/await`) and native C-speed Pydantic validation, offering sub-millisecond request serialization and automatic OpenAPI documentation.
 
 ### 2.2 Apache Kafka (Message Broker)

@@ -93,7 +93,19 @@ class KafkaEventConsumer:
                     raw_val = msg.value().decode("utf-8")
                     try:
                         data = json.loads(raw_val)
-                        event = TransactionIngestionEvent(**data)
+                        if isinstance(data, dict) and "header" in data and "payload" in data:
+                            event = TransactionIngestionEvent(**data)
+                        elif isinstance(data, dict):
+                            header = EventHeader(
+                                event_id=data.get("event_id") or str(uuid.uuid4()),
+                                idempotency_key=data.get("idempotency_key") or str(uuid.uuid4()),
+                                event_type=EventType.TRANSACTION_INGESTED,
+                                partition_key=data.get("user_id") or data.get("customer_id") or data.get("transaction_ref"),
+                            )
+                            event = TransactionIngestionEvent(header=header, payload=TransactionPayload(**data))
+                        else:
+                            raise ValueError(f"Invalid message payload: {data}")
+
                         if self.callback:
                             self.callback(event)
                         self._consumer.commit(msg, asynchronous=False)
@@ -127,7 +139,19 @@ class KafkaEventConsumer:
                         raw_val = msg.value.decode("utf-8") if isinstance(msg.value, bytes) else msg.value
                         try:
                             data = json.loads(raw_val) if isinstance(raw_val, str) else raw_val
-                            event = TransactionIngestionEvent(**data)
+                            if isinstance(data, dict) and "header" in data and "payload" in data:
+                                event = TransactionIngestionEvent(**data)
+                            elif isinstance(data, dict):
+                                header = EventHeader(
+                                    event_id=data.get("event_id") or str(uuid.uuid4()),
+                                    idempotency_key=data.get("idempotency_key") or str(uuid.uuid4()),
+                                    event_type=EventType.TRANSACTION_INGESTED,
+                                    partition_key=data.get("user_id") or data.get("customer_id") or data.get("transaction_ref"),
+                                )
+                                event = TransactionIngestionEvent(header=header, payload=TransactionPayload(**data))
+                            else:
+                                raise ValueError(f"Invalid message payload: {data}")
+
                             if self.callback:
                                 self.callback(event)
                             self._consumer.commit()

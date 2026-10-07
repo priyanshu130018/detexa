@@ -66,22 +66,17 @@
     },
     {
       "name": "3. Register User",
-      "request": {
-        "method": "POST",
-        "header": [
-          { "key": "Content-Type", "value": "application/json" }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"email\": \"postman_tester_{{$timestamp}}@detexa.io\",\n  \"password\": \"PostmanPass@2026!\",\n  \"full_name\": \"Postman Newman Runner\"\n}"
-        },
-        "url": {
-          "raw": "{{BASE_URL}}/auth/register",
-          "host": ["{{BASE_URL}}"],
-          "path": ["auth", "register"]
-        }
-      },
       "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "var dynamicEmail = 'postman_tester_' + Date.now() + '@detexa.io';",
+              "pm.environment.set('USER_EMAIL', dynamicEmail);"
+            ],
+            "type": "text/javascript"
+          }
+        },
         {
           "listen": "test",
           "script": {
@@ -92,13 +87,28 @@
               "var jsonData = pm.response.json();",
               "if (jsonData.access_token) {",
               "    pm.environment.set('JWT_TOKEN', jsonData.access_token);",
-              "    pm.environment.set('USER_ID', jsonData.user.id);",
+              "    pm.environment.set('USER_ID', jsonData.user_id || (jsonData.user && jsonData.user.id));",
               "}"
             ],
             "type": "text/javascript"
           }
         }
-      ]
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{USER_EMAIL}}\",\n  \"password\": \"PostmanPass@2026!\",\n  \"name\": \"Postman Newman Runner\"\n}"
+        },
+        "url": {
+          "raw": "{{BASE_URL}}/auth/register",
+          "host": ["{{BASE_URL}}"],
+          "path": ["auth", "register"]
+        }
+      }
     },
     {
       "name": "4. User Login",
@@ -109,7 +119,7 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"email\": \"postman_tester@detexa.io\",\n  \"password\": \"PostmanPass@2026!\"\n}"
+          "raw": "{\n  \"email\": \"{{USER_EMAIL}}\",\n  \"password\": \"PostmanPass@2026!\"\n}"
         },
         "url": {
           "raw": "{{BASE_URL}}/auth/login",
@@ -122,6 +132,9 @@
           "listen": "test",
           "script": {
             "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
               "if (pm.response.code === 200) {",
               "    var jsonData = pm.response.json();",
               "    pm.environment.set('JWT_TOKEN', jsonData.access_token);",
@@ -302,9 +315,9 @@
           { "key": "Authorization", "value": "Bearer {{JWT_TOKEN}}" }
         ],
         "url": {
-          "raw": "{{BASE_URL}}/dashboard/summary",
+          "raw": "{{BASE_URL}}/dashboard/stats",
           "host": ["{{BASE_URL}}"],
-          "path": ["dashboard", "summary"]
+          "path": ["dashboard", "stats"]
         }
       },
       "event": [
@@ -358,7 +371,7 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"amount\": 85.0,\n  \"currency\": \"USD\",\n  \"merchant\": \"Target Store\",\n  \"category\": \"retail\",\n  \"country\": \"US\"\n}"
+          "raw": "{\n  \"transaction_ref\": \"TXN-STREAM-{{$timestamp}}\",\n  \"amount\": 850.0,\n  \"currency\": \"INR\",\n  \"merchant\": \"Target Store\",\n  \"category\": \"retail\",\n  \"merchant_category\": \"Retail\",\n  \"country\": \"IN\"\n}"
         },
         "url": {
           "raw": "{{BASE_URL}}/streaming/transactions",

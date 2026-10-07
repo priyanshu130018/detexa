@@ -248,3 +248,84 @@ When adding new features to the 61-feature canonical vector:
 | `Redis Connection Refused` | Redis container not running | Check `docker compose ps` and verify port `6379`. |
 | `Neo4j Unauthorized` | Password mismatch | Verify `NEO4J_PASSWORD` in `.env` matches container initialization credentials (`detexa_secret_password`). |
 | `Theme Flashing on Reload` | Theme script not executing in `<head>` | Verify `index.html` inline script checks `localStorage.getItem('detexa_theme')` before body render. |
+
+---
+
+## 10. Platform Validation & Benchmark Suite
+
+This section outlines the exact test procedures, commands, execution environments, sample sizes, and empirically measured results across all validation domains.
+
+### 10.1 Test Execution Environment
+- **Operating System:** Windows 10 Host with WSL2 / Docker Linux Containers
+- **CPU:** Intel Core Processor (16 logical cores)
+- **RAM:** 15.65 GB System Memory
+- **Python Version:** Python 3.11.x (Docker backend) / Python 3.10.9 (Host CLI)
+- **Docker Stack:** Redis 7-Alpine, Neo4j 5.18.0, Apache Kafka 3.7.0 (KRaft), Apache Flink 1.18.1 (JobManager & TaskManager)
+
+---
+
+### 10.2 Validation Procedures & Measured Results
+
+#### 1. Baseline Unit & Integration Tests (Pytest)
+- **Command:** `docker exec detexa_backend pytest tests/ -v`
+- **Scope:** Unit, API, Database, Graph, and Streaming E2E suites.
+- **Measured Result:** **100% Pass Rate** (0 failures, 0 regressions).
+
+#### 2. Postman Functional API Testing (Newman)
+- **Command:** `npx --yes newman run postman/Detexa.postman_collection.json -e postman/Detexa.postman_environment.json`
+- **Scope:** Authentication (register, login, token refresh, unauthorized rejection), Health/Readiness, Dashboard summaries, Single/Batch Predictions, Streaming Ingestion, Alert triage.
+- **Measured Result:** **12/12 requests executed, 14/14 assertions passed, 0 failures**.
+
+#### 3. Machine Learning Evaluation (Indian Banking Dataset)
+- **Command:** `python backend/scripts/evaluate_models.py`
+- **Dataset:** `backend/data/raw/indian_banking_transactions.csv` (550,000 total records).
+- **Split Protocol:** Strictly time-based chronological split:
+  - **Train Set:** 440,000 transactions (2019-01-01 to 2022-12-31).
+  - **Holdout Test Set:** 110,000 transactions (2022-12-31 to 2024-01-01), containing **987 positive fraud cases** (0.897% prevalence).
+- **Data Leakage Audit:** **PASSED**. No target features present, maximum feature-to-target correlation is 0.0642 (`transaction_amount`), zero temporal split overlap.
+- **Comparative Results:**
+  - **ROC-AUC:** **0.8156** (XGBoost) vs **0.5474** (Logistic Regression baseline).
+  - **PR-AUC:** **0.1041** (XGBoost) vs **0.0170** (Logistic Regression baseline).
+  - **Recall @ 1% FPR:** **21.18%** (XGBoost at cutoff 0.6105) vs **8.51%** (Logistic Regression).
+  - **Threshold 0.60 Performance:**
+    - *XGBoost:* Precision: 0.1614, Recall: 0.2330, F1: 0.1907, Specificity: 0.9890, FPR: 0.0110, FNR: 0.7670. Confusion Matrix: `[[107818, 1195], [757, 230]]`.
+    - *Logistic Regression:* Precision: 0.0352, Recall: 0.1145, F1: 0.0539, Specificity: 0.9716, FPR: 0.0284, FNR: 0.8855. Confusion Matrix: `[[105917, 3096], [874, 113]]`.
+  - **Threshold 0.85 Performance:**
+    - *XGBoost:* Precision: 0.1492, Recall: 0.0719, F1: 0.0971, Specificity: 0.9963, FPR: 0.0037, FNR: 0.9281. Confusion Matrix: `[[108608, 405], [916, 71]]`.
+    - *Logistic Regression:* Precision: 0.0643, Recall: 0.0395, F1: 0.0489, Specificity: 0.9948, FPR: 0.0052, FNR: 0.9605. Confusion Matrix: `[[108447, 566], [948, 39]]`.
+
+#### 4. API Real-Time Latency Benchmark (`/api/v1/predict/realtime`)
+- **Command:** `python backend/scripts/benchmark_api_latency.py`
+- **Setup:** 300 warmup requests (excluded), 1,000 measured requests per trial, 3 trials per concurrency tier with Redis auth session caching (60s TTL).
+- **Measured Metrics (Median Trial):**
+  - **Concurrency 1:** Throughput: **14.0 req/s**, p50: **65.36 ms**, p95: **128.09 ms**, p99: **188.67 ms**, Errors: 0.
+  - **Concurrency 10:** Throughput: **19.2 req/s**, p50: **470.79 ms**, p95: **1006.48 ms**, p99: **1620.93 ms**, Errors: 0.
+  - **Concurrency 50:** Throughput: **22.1 req/s**, p50: **2021.46 ms**, p95: **5637.84 ms**, p99: **7723.70 ms**, Errors: 33.
+
+#### 5. Decision Engine Policy Rules & Boundary Verification
+- **Command:** `pytest backend/tests/unit/test_decision_engine.py -v`
+- **Scope:** 22 unit tests covering >=5 distinct cases each for `ALLOW`, `CHALLENGE`, `REVIEW`, `BLOCK`, and exact boundary conditions around thresholds 0.40, 0.60, 0.65, and 0.85.
+- **Measured Result:** **22/22 tests PASSED (100%)**.
+
+#### 6. End-to-End Streaming Pipeline Benchmark
+- **Command:** `python backend/scripts/benchmark_streaming_pipeline.py`
+- **Pipeline:** API (`POST /api/v1/streaming/transactions`) → Kafka `detexa.transactions.raw` → Flink Worker → Redis/Neo4j → XGBoost → SHAP → Decision Engine → PostgreSQL → WebSocket.
+- **Scale:** **10,000 transactions** across 4 progressive concurrency tiers (C=10, 25, 50, 100).
+- **Flink Cluster:** Apache Flink 1.18.1 online at `localhost:8081` (1 TaskManager, 4 task slots).
+- **Measured Results:**
+  - **Total Sent:** 10,000 | **Unique References:** 10,000 | **Duplicate Decisions:** 0.
+  - **Delivery Success Rate:** **99.99%** (9,999 / 10,000 processed).
+  - **Tier-1 (500 txns @ C=10):** 50.38 req/s, p50: 58.02 ms, p95: 210.99 ms, p99: 6108.17 ms, 0 errors.
+  - **Tier-2 (1500 txns @ C=25):** **149.59 req/s**, p50: 99.75 ms, p95: 542.65 ms, p99: 852.58 ms, 0 errors (Peak Zero-Loss Throughput).
+  - **Tier-3 (3000 txns @ C=50):** 89.66 req/s, p50: 381.30 ms, p95: 1572.81 ms, p99: 2661.23 ms, 0 errors.
+  - **Tier-4 (5000 txns @ C=100):** 72.82 req/s, p50: 808.25 ms, p95: 4484.18 ms, p99: 6605.77 ms, 1 error (0.02% error rate under peak saturation).
+
+#### 7. Infrastructure Resilience & Fault Injection Suite
+- **Command:** `python backend/scripts/test_resilience.py`
+- **Fault Scenarios:** Stopping and restarting Redis, Neo4j, and Kafka containers (3 iterations each).
+- **Fail-Safe Invariant:** System degrades gracefully during outages using fallback buffers and default safe features without crashing, and auto-recovers immediately upon container restart.
+- **Measured Result:** **9/9 trials PASSED (100.00% Graceful Recovery Rate)**:
+  - Redis Outage (3/3 passed)
+  - Neo4j Outage (3/3 passed)
+  - Kafka Outage (3/3 passed)
+

@@ -1,0 +1,185 @@
+{
+  "timestamp": "2026-10-07T19:32:55.093124+00:00",
+  "total_trials": 9,
+  "passed_trials": 9,
+  "all_graceful_recovery": true,
+  "scenarios": {
+    "Redis": [
+      {
+        "service": "Redis",
+        "trial": 1,
+        "passed": true,
+        "pre_outage": {
+          "predict_realtime_status": 200,
+          "streaming_ingest_status": 202
+        },
+        "during_outage": {
+          "predict_realtime_status": 200,
+          "streaming_ingest_status": 202,
+          "graceful_degradation": true
+        },
+        "post_recovery": {
+          "predict_realtime_status": 200,
+          "streaming_ingest_status": 202,
+          "recovered": true
+        }
+      },
+      {
+        "service": "Redis",
+        "trial": 2,
+        "passed": true,
+        "pre_outage": {
+          "predict_realtime_status": 200,
+          "streaming_ingest_status": 202
+        },
+        "during_outage": {
+          "predict_realtime_status": 200,
+          "streaming_ingest_status": 202,
+          "graceful_degradation": true
+        },
+        "post_recovery": {
+          "predict_realtime_status": 200,
+          "streaming_ingest_status": 202,
+          "recovered": true
+        }
+      },
+      {
+        "service": "Redis",
+        "trial": 3,
+        "passed": true,
+        "pre_outage": {
+          "predict_realtime_status": 200,
+          "streaming_ingest_status": 202
+        },
+        "during_outage": {
+          "predict_realtime_status": 200,
+          "streaming_ingest_status": 202,
+          "graceful_degradation": true
+        },
+        "post_recovery": {
+          "predict_realtime_status": 200,
+          "streaming_ingest_status": 202,
+          "recovered": true
+        }
+      }
+    ],
+    "Neo4j": [
+      {
+        "service": "Neo4j",
+        "trial": 1,
+        "passed": true,
+        "pre_outage": {
+          "predict_realtime_status": 200,
+          "streaming_ingest_status": 202
+        },
+        "during_outage": {
+          "predict_realtime_status": 200,
+          "streaming_ingest_status": 202,
+          "graceful_degradation": true
+        },
+        "post_recovery": {
+          "predict_realtime_status": 200,
+          "streaming_ingest_status": 202,
+          "recovered": true
+        }
+      },
+      {
+        "service": "Neo4j",
+        "trial": 2,
+        "passed": true,
+        "pre_outage": {
+          "predict_realtime_status": 200,
+          "streaming_ingest_status": 202
+        },
+        "during_outage": {
+          "predict_realtime_status": 200,
+          "streaming_ingest_status": 202,
+          "graceful_degradation": true
+        },
+        "post_recovery": {
+          "predict_realtime_status": 200,
+          "streaming_ingest_status": 202,
+          "recovered": true
+        }
+      },
+      {
+        "service": "Neo4j",
+        "trial": 3,
+        "passed": true,
+        "pre_outage": {
+          "predict_realtime_status": 200,
+          "streaming_ingest_status": 202
+        },
+        "during_outage": {
+          "predict_realtime_status": 200,
+          "streaming_ingest_status": 202,
+          "graceful_degradation": true
+        },
+        "post_recovery": {
+          "predict_realtime_status": 200,
+          "streaming_ingest_status": 202,
+          "recovered": true
+        }
+      }
+    ],
+    "Kafka": [
+      {
+        "service": "Kafka",
+        "trial": 1,
+        "passed": true,
+        "pre_outage": {
+          "predict_realtime_status": 200,
+          "streaming_ingest_status": 202
+        },
+        "during_outage": {
+          "predict_realtime_status": 200,
+          "streaming_ingest_status": 202,
+          "graceful_degradation": true
+        },
+        "post_recovery": {
+          "predict_realtime_status": 200,
+          "streaming_ingest_status": 202,
+          "recovered": true
+        }
+      },
+      {
+        "service": "Kafka",
+        "trial": 2,
+        "passed": true,
+        "pre_outage": {
+          "predict_realtime_status": 200,
+          "streaming_ingest_status": 202
+        },
+        "during_outage": {
+          "predict_realtime_status": 200,
+          "streaming_ingest_status": 202,
+          "graceful_degradation": true
+        },
+        "post_recovery": {
+          "predict_realtime_status": 200,
+          "streaming_ingest_status": 202,
+          "recovered": true
+        }
+      },
+      {
+        "service": "Kafka",
+        "trial": 3,
+        "passed": true,
+        "pre_outage": {
+          "predict_realtime_status": 200,
+          "streaming_ingest_status": 202
+        },
+        "during_outage": {
+          "predict_realtime_status": 200,
+          "streaming_ingest_status": 202,
+          "graceful_degradation": true
+        },
+        "post_recovery": {
+          "predict_realtime_status": 200,
+          "streaming_ingest_status": 202,
+          "recovered": true
+        }
+      }
+    ]
+  }
+}

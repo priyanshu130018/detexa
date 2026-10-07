@@ -126,7 +126,7 @@ class FlinkRealTimeStreamProcessor:
     def __init__(self):
         self.window_state = SlidingWindowState()
         self.decision_engine = RealTimeDecisionEngine()
-        self.ml_model = CreditFraudModel.get_instance()
+        self.ml_model = BankingFraudModel.get_instance()
         self.producer = KafkaEventProducer.get_instance()
 
     @classmethod
@@ -216,7 +216,7 @@ class FlinkRealTimeStreamProcessor:
             reason_codes=reason_codes,
             shap_top_features=shap_drivers,
             latency_ms=round(latency_ms, 2),
-            model_version=CreditFraudModel.MODEL_VERSION,
+            model_version=BankingFraudModel.MODEL_VERSION,
         )
 
         # Publish to scored transactions stream

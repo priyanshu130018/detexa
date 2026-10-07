@@ -137,6 +137,7 @@ class PostgreSQLSinkOperator:
                 ip_id=ip_obj.id if ip_obj else None,
                 transaction_ref=event.transaction_ref,
                 amount=event.amount,
+                transaction_amount=event.amount,
                 currency=event.currency,
                 merchant=merchant.name,
                 category=merchant.category,

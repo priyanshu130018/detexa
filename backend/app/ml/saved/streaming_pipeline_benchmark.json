@@ -1,0 +1,69 @@
+{
+  "timestamp": "2026-10-07T19:27:49.167484+00:00",
+  "flink_cluster": {
+    "status": "ONLINE",
+    "taskmanagers": 1,
+    "slots_total": 4,
+    "slots_available": 4,
+    "flink_version": "1.18.1"
+  },
+  "total_transactions_sent": 10000,
+  "total_successes": 9999,
+  "total_errors": 1,
+  "overall_message_loss_rate": 0.0001,
+  "highest_sustained_tps_zero_loss": 149.59,
+  "tier_benchmarks": [
+    {
+      "tier": "Tier-1 (Low Concurrency)",
+      "target_count": 500,
+      "concurrency": 10,
+      "success_count": 500,
+      "error_count": 0,
+      "error_rate": 0.0,
+      "total_time_seconds": 9.92,
+      "throughput_tps": 50.38,
+      "p50_ms": 58.02,
+      "p95_ms": 210.99,
+      "p99_ms": 6108.17
+    },
+    {
+      "tier": "Tier-2 (Medium Concurrency)",
+      "target_count": 1500,
+      "concurrency": 25,
+      "success_count": 1500,
+      "error_count": 0,
+      "error_rate": 0.0,
+      "total_time_seconds": 10.03,
+      "throughput_tps": 149.59,
+      "p50_ms": 99.75,
+      "p95_ms": 542.65,
+      "p99_ms": 852.58
+    },
+    {
+      "tier": "Tier-3 (High Concurrency)",
+      "target_count": 3000,
+      "concurrency": 50,
+      "success_count": 3000,
+      "error_count": 0,
+      "error_rate": 0.0,
+      "total_time_seconds": 33.46,
+      "throughput_tps": 89.66,
+      "p50_ms": 381.3,
+      "p95_ms": 1572.81,
+      "p99_ms": 2661.23
+    },
+    {
+      "tier": "Tier-4 (Peak Stress)",
+      "target_count": 5000,
+      "concurrency": 100,
+      "success_count": 4999,
+      "error_count": 1,
+      "error_rate": 0.0002,
+      "total_time_seconds": 68.65,
+      "throughput_tps": 72.82,
+      "p50_ms": 808.25,
+      "p95_ms": 4484.18,
+      "p99_ms": 6605.77
+    }
+  ]
+}

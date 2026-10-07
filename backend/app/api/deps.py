@@ -42,13 +42,15 @@ class PaginationParams:
         self.limit = page_size
 
 
+from app.core.redis import cache_get, cache_set
+
 # ── Auth & Current User Dependencies ─────────────────────────────────────────
 
 def get_current_user(
     auth_header: Optional[HTTPAuthorizationCredentials] = Depends(security_scheme),
     db: Session = Depends(get_db),
 ) -> User:
-    """Validate Bearer JWT and return the authenticated User model."""
+    """Validate Bearer JWT and return the authenticated User model (cached in Redis with 60s TTL)."""
     if not auth_header:
         raise AuthenticationError("Authorization header missing")
 
@@ -66,6 +68,22 @@ def get_current_user(
     except ValueError:
         raise AuthenticationError("Invalid user ID in token")
 
+    # 1. Fast-Path: Check Redis user cache
+    cache_key = f"auth:user:{user_id_str}"
+    cached_user_data = cache_get(cache_key)
+    if cached_user_data and isinstance(cached_user_data, dict):
+        if not cached_user_data.get("is_active", True):
+            raise AuthorizationError("User account has been deactivated")
+        return User(
+            id=uuid.UUID(cached_user_data["id"]),
+            name=cached_user_data.get("name", "Detexa User"),
+            email=cached_user_data.get("email", ""),
+            mobile=cached_user_data.get("mobile"),
+            is_active=bool(cached_user_data.get("is_active", True)),
+            is_admin=bool(cached_user_data.get("is_admin", False)),
+        )
+
+    # 2. Slow-Path: Query PostgreSQL on cache miss
     user_repo = UserRepository(db)
     user = user_repo.get(user_uuid)
     if not user:
@@ -73,6 +91,20 @@ def get_current_user(
 
     if not user.is_active:
         raise AuthorizationError("User account has been deactivated")
+
+    # Populate Redis cache with 60-second TTL
+    cache_set(
+        cache_key,
+        {
+            "id": str(user.id),
+            "name": user.name,
+            "email": user.email,
+            "mobile": user.mobile,
+            "is_active": user.is_active,
+            "is_admin": user.is_admin,
+        },
+        ttl_seconds=60,
+    )
 
     return user
 

@@ -17,9 +17,37 @@ from neo4j import GraphDatabase
 # 1. PostgreSQL Verification
 def test_postgres():
     print("=" * 60)
-    print("1. TESTING POSTGRESQL / NEON DATABASE")
+    print("1. TESTING DATABASE (POSTGRESQL / SQLITE)")
     print("=" * 60)
-    db_url = os.getenv("DATABASE_URL")
+    db_url = os.getenv("DATABASE_URL", "sqlite:///./test.db")
+    if db_url.startswith("sqlite"):
+        from app.db.session import SessionLocal, engine
+        from app.db.models import AuditLog, User
+        from sqlalchemy import inspect
+        insp = inspect(engine)
+        tables = insp.get_table_names()
+        print(f"Found {len(tables)} tables in schema: {tables}")
+        assert len(tables) >= 5, f"Expected at least 5 tables, got {len(tables)}"
+        
+        session = SessionLocal()
+        test_id = uuid.uuid4()
+        log = AuditLog(id=test_id, action="INTEGRATION_TEST", entity_type="system", entity_id=str(test_id), details={"status": "ok"})
+        session.add(log)
+        session.commit()
+        retrieved = session.query(AuditLog).filter(AuditLog.id == test_id).first()
+        assert retrieved is not None
+        assert retrieved.action == "INTEGRATION_TEST"
+
+        admin = session.query(User).filter(User.email == "admin@detexa.ai").first()
+        if not admin:
+            admin = User(id=uuid.uuid4(), name="Detexa Admin", email="admin@detexa.ai", mobile="+1234567890", hashed_password="$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW", is_active=True, is_admin=True)
+            session.add(admin)
+            session.commit()
+        user_id = str(admin.id)
+        session.close()
+        print(f"Verified test user ID in DB: {user_id}")
+        return user_id
+
     conn = psycopg2.connect(db_url)
     cursor = conn.cursor()
     
@@ -63,6 +91,7 @@ def test_postgres():
     
     cursor.close()
     conn.close()
+    return user_id
     print("✅ PostgreSQL / Neon DB test PASSED!")
     return user_id
 
@@ -230,6 +259,30 @@ def test_behavior_model():
     assert len(factors_susp) > 0
     print("✅ Behavior Anomaly ML Model test PASSED!")
 
+import pytest
+
+@pytest.fixture
+def auth_user_id():
+    from app.db.session import SessionLocal
+    from app.db.models import User
+    session = SessionLocal()
+    admin = session.query(User).filter(User.email == "admin@detexa.ai").first()
+    if not admin:
+        admin = User(
+            id=uuid.uuid4(),
+            name="Detexa Admin",
+            email="admin@detexa.ai",
+            mobile="+1234567890",
+            hashed_password="$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW",
+            is_active=True,
+            is_admin=True,
+        )
+        session.add(admin)
+        session.commit()
+    user_id = str(admin.id)
+    session.close()
+    return user_id
+
 # 6. End-to-End Real Transaction & Fraud Scenarios Verification
 def test_e2e_scenarios(auth_user_id: str):
     print("=" * 60)
@@ -238,6 +291,8 @@ def test_e2e_scenarios(auth_user_id: str):
     from fastapi.testclient import TestClient
     from app.main import app
     from app.core.security import create_access_token
+    from app.db.session import SessionLocal
+    from app.db.models import User
     
     client = TestClient(app)
     
@@ -251,21 +306,24 @@ def test_e2e_scenarios(auth_user_id: str):
     token = create_access_token(data={"sub": str(auth_user_id), "role": "admin"})
     headers = {"Authorization": f"Bearer {token}"}
     
-    # Helper to insert test user into PostgreSQL
+    # Helper to insert test user into DB
     def create_scenario_user(uid: str, email_prefix: str):
-        db_url = os.getenv("NEON_DATABASE_URL") or os.getenv("DATABASE_URL")
-        if "sslmode" not in db_url and "neon.tech" in db_url:
-            db_url += "?sslmode=require"
-        conn = psycopg2.connect(db_url)
-        cur = conn.cursor()
-        cur.execute("""
-            INSERT INTO users (id, name, email, mobile, hashed_password, is_active, is_admin)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (id) DO NOTHING;
-        """, (uid, f"User {email_prefix}", f"{email_prefix}_{uid[:6]}@example.com", "+1000000000", "hash", True, False))
-        conn.commit()
-        cur.close()
-        conn.close()
+        session = SessionLocal()
+        user_uuid = uuid.UUID(uid) if isinstance(uid, str) else uid
+        u = session.query(User).filter(User.id == user_uuid).first()
+        if not u:
+            u = User(
+                id=user_uuid,
+                name=f"User {email_prefix}",
+                email=f"{email_prefix}_{uuid.uuid4().hex[:6]}@example.com",
+                mobile="+1234567890",
+                hashed_password="$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW",
+                is_active=True,
+                is_admin=False,
+            )
+            session.add(u)
+            session.commit()
+        session.close()
 
     # Scenario A: Normal Low-Risk Transaction
     print("\n--- Scenario A: Normal Low-Risk Transaction ---")

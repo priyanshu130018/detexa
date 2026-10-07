@@ -1,1 +1,0 @@
-# Detexa – Fraud Detection Platform

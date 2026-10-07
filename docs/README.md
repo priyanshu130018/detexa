@@ -33,6 +33,26 @@ Detexa solves this by deploying a **hybrid detection architecture**:
 
 ---
 
+## 📊 Measured Headline Performance & Validation Metrics
+
+All metrics below are strictly measured from empirical benchmarks executed on the active platform:
+
+| Domain | Metric | Measured Value | Baseline / Notes |
+|---|---|---|---|
+| **ML Discrimination** | **ROC-AUC** | **0.8156** | vs 0.5474 (Logistic Regression baseline) on 110,000 holdout test transactions |
+| **ML Precision-Recall** | **PR-AUC** | **0.1041** | vs 0.0170 (Logistic Regression baseline) on 987 fraud cases |
+| **Early Detection** | **Recall @ 1% FPR** | **21.18%** | Decision threshold cutoff: 0.6105 |
+| **Strict Specificity** | **Specificity @ T=0.85** | **99.63%** | FPR: 0.37% (405 false positives out of 109,013 negatives) |
+| **In-Memory ML Inference** | **XGBoost Booster** | **< 1.0 ms** | Inplace C++ Booster inference |
+| **API Latency (p50 / p95)** | **C=1 Real-Time** | **65.36 ms / 128.09 ms** | 14.0 req/s throughput with JWT auth & Redis user caching |
+| **API Latency (p50 / p95)** | **C=10 Real-Time** | **470.79 ms / 1006.48 ms** | 19.2 req/s throughput with JWT auth & Redis user caching |
+| **Peak Streaming Throughput** | **Zero-Loss Sustained TPS** | **149.59 req/s** | API → Kafka → Flink → PostgreSQL (0% loss at C=25) |
+| **Stream Scale & Reliability** | **10,000 Txn Ingestion** | **99.99% Success** | 9,999 / 10,000 delivered; 10,000 unique references, 0 duplicates |
+| **Infrastructure Resilience** | **Fault Auto-Recovery** | **100% (9/9 trials)** | Tested 3x each for Redis, Neo4j, and Kafka outages |
+| **Functional & Unit Tests** | **Test Pass Rate** | **100%** | Newman: 14/14 passed; Decision Engine: 22/22 passed |
+
+---
+
 ## 🏛️ High-Level Architecture & Data Flow
 
 ```
