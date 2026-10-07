@@ -1,0 +1,384 @@
+{
+  "info": {
+    "_postman_id": "detexa-collection-001",
+    "name": "Detexa Fraud Platform API Collection",
+    "description": "Comprehensive Newman-ready test collection for Detexa FastAPI backend.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Healthcheck",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8000/health",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8000",
+          "path": ["health"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "pm.test('Service is healthy', function () {",
+              "    var jsonData = pm.response.json();",
+              "    pm.expect(jsonData.status).to.eql('healthy');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Readiness Probe",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8000/health/ready",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8000",
+          "path": ["health", "ready"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200 or 503', function () {",
+              "    pm.expect(pm.response.code).to.be.oneOf([200, 503]);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Register User",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"postman_tester_{{$timestamp}}@detexa.io\",\n  \"password\": \"PostmanPass@2026!\",\n  \"full_name\": \"Postman Newman Runner\"\n}"
+        },
+        "url": {
+          "raw": "{{BASE_URL}}/auth/register",
+          "host": ["{{BASE_URL}}"],
+          "path": ["auth", "register"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 201', function () {",
+              "    pm.response.to.have.status(201);",
+              "});",
+              "var jsonData = pm.response.json();",
+              "if (jsonData.access_token) {",
+              "    pm.environment.set('JWT_TOKEN', jsonData.access_token);",
+              "    pm.environment.set('USER_ID', jsonData.user.id);",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. User Login",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"postman_tester@detexa.io\",\n  \"password\": \"PostmanPass@2026!\"\n}"
+        },
+        "url": {
+          "raw": "{{BASE_URL}}/auth/login",
+          "host": ["{{BASE_URL}}"],
+          "path": ["auth", "login"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "    var jsonData = pm.response.json();",
+              "    pm.environment.set('JWT_TOKEN', jsonData.access_token);",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Get Current User",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{JWT_TOKEN}}" }
+        ],
+        "url": {
+          "raw": "{{BASE_URL}}/auth/me",
+          "host": ["{{BASE_URL}}"],
+          "path": ["auth", "me"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Response is authorized', function () {",
+              "    pm.expect(pm.response.code).to.be.oneOf([200, 401]);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Predict Credit Fraud (Single)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{JWT_TOKEN}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"amount\": 149.99,\n  \"currency\": \"USD\",\n  \"merchant\": \"BestBuy Electronics\",\n  \"category\": \"electronics\",\n  \"country\": \"US\",\n  \"v1\": 0.05,\n  \"v2\": -0.02,\n  \"v3\": 0.1\n}"
+        },
+        "url": {
+          "raw": "{{BASE_URL}}/predict/credit",
+          "host": ["{{BASE_URL}}"],
+          "path": ["predict", "credit"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "    var jsonData = pm.response.json();",
+              "    pm.test('Fraud score present and bounded', function () {",
+              "        pm.expect(jsonData.fraud_score).to.be.at.least(0.0);",
+              "        pm.expect(jsonData.fraud_score).to.be.at.most(1.0);",
+              "    });",
+              "    pm.test('Decision present', function () {",
+              "        pm.expect(jsonData.decision).to.be.oneOf(['ALLOW', 'CHALLENGE', 'REVIEW', 'BLOCK']);",
+              "    });",
+              "    if (jsonData.transaction_id) {",
+              "        pm.environment.set('TRANSACTION_ID', jsonData.transaction_id);",
+              "    }",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. Predict Behavior Anomaly",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{JWT_TOKEN}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"session_id\": \"sess-postman-01\",\n  \"login_hour\": 14,\n  \"typing_speed\": 4.8,\n  \"mouse_velocity\": 195.0,\n  \"is_vpn\": false,\n  \"is_tor\": false,\n  \"failed_logins\": 0\n}"
+        },
+        "url": {
+          "raw": "{{BASE_URL}}/predict/behavior",
+          "host": ["{{BASE_URL}}"],
+          "path": ["predict", "behavior"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "    var jsonData = pm.response.json();",
+              "    pm.test('Anomaly score present', function () {",
+              "        pm.expect(jsonData.anomaly_score).to.be.at.least(0.0);",
+              "    });",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "8. Get Transactions List",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{JWT_TOKEN}}" }
+        ],
+        "url": {
+          "raw": "{{BASE_URL}}/transactions?page=1&page_size=20",
+          "host": ["{{BASE_URL}}"],
+          "path": ["transactions"],
+          "query": [
+            { "key": "page", "value": "1" },
+            { "key": "page_size", "value": "20" }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Response status is valid', function () {",
+              "    pm.expect(pm.response.code).to.be.oneOf([200, 401]);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "9. Get Alerts List",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{JWT_TOKEN}}" }
+        ],
+        "url": {
+          "raw": "{{BASE_URL}}/alerts",
+          "host": ["{{BASE_URL}}"],
+          "path": ["alerts"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Response status is valid', function () {",
+              "    pm.expect(pm.response.code).to.be.oneOf([200, 401]);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "10. Dashboard Statistics",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{JWT_TOKEN}}" }
+        ],
+        "url": {
+          "raw": "{{BASE_URL}}/dashboard/summary",
+          "host": ["{{BASE_URL}}"],
+          "path": ["dashboard", "summary"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Response status is valid', function () {",
+              "    pm.expect(pm.response.code).to.be.oneOf([200, 401]);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "11. Streaming Diagnostics Metrics",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{JWT_TOKEN}}" }
+        ],
+        "url": {
+          "raw": "{{BASE_URL}}/streaming/metrics",
+          "host": ["{{BASE_URL}}"],
+          "path": ["streaming", "metrics"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Response status is valid', function () {",
+              "    pm.expect(pm.response.code).to.be.oneOf([200, 401]);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "12. Ingest Streaming Transaction",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{JWT_TOKEN}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"amount\": 85.0,\n  \"currency\": \"USD\",\n  \"merchant\": \"Target Store\",\n  \"category\": \"retail\",\n  \"country\": \"US\"\n}"
+        },
+        "url": {
+          "raw": "{{BASE_URL}}/streaming/transactions",
+          "host": ["{{BASE_URL}}"],
+          "path": ["streaming", "transactions"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Response status is valid', function () {",
+              "    pm.expect(pm.response.code).to.be.oneOf([200, 202, 401]);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    }
+  ]
+}

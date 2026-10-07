@@ -1,6 +1,7 @@
-# Python
+# Python bytecode and cache
 __pycache__/
 *.py[cod]
+*$py.class
 *.pyo
 *.pyd
 .Python
@@ -8,43 +9,50 @@ __pycache__/
 venv/
 env/
 *.egg-info/
+.pytest_cache/
+.coverage
+coverage/
+htmlcov/
+
+# Build and distribution
 dist/
 build/
 
-# Environment
+# Environment configurations (Keep examples tracked)
 .env
 *.env
+!.env.example
+!backend/.env.example
 
-# Models (large binaries – use DVC or cloud storage in production)
-ml/models/saved/*.pkl
-ml/models/saved/*.joblib
+# Datasets and raw CSV files (Never commit datasets to git)
 data/
 *.csv
+*.tsv
+*.parquet
 
 # Logs
-logs/*.log
-logs/*.log.*
+logs/
+*.log
+*.log.*
 
-# DB
-*.db
+# Local databases
 *.sqlite3
 test.db
+test_runner.db
 
-# IDE
+# IDE and OS files
 .vscode/
 .idea/
 *.swp
-
-# OS
 .DS_Store
 Thumbs.db
 
-# Streamlit
-.streamlit/
-
-# Alembic
-alembic/versions/*.py
-.neon
+# Frontend dependencies and builds
 node_modules/
+frontend/dist/
+frontend/.vite/
 
-
+# Cloud / Temporary artifacts
+.neon
+tmp/
+checkpoints/

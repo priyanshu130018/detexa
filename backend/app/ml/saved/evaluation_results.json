@@ -1,0 +1,338 @@
+{
+  "loading": {
+    "credit_loaded": true,
+    "behavior_loaded": true,
+    "active_engine": "xgboost_booster_inplace",
+    "credit_cold_start_ms": 110.42200600002161,
+    "behavior_cold_start_ms": 404.00175099998137,
+    "inference_service_cold_start_ms": 33.85116600000515,
+    "credit_pipeline_path": "/app/app/ml/saved/credit_fraud_pipeline.pkl",
+    "behavior_pipeline_path": "/app/app/ml/saved/behavior_pipeline.pkl",
+    "credit_booster_path": "/app/app/ml/saved/credit_fraud_booster.json"
+  },
+  "dataset": {
+    "raw_samples": 284807,
+    "clean_samples": 283726,
+    "duplicate_count": 1081,
+    "missing_count": 0,
+    "test_samples": 56746,
+    "test_fraud_samples": 95,
+    "test_legit_samples": 56651,
+    "fraud_ratio_pct": 0.1727485630620034
+  },
+  "credit_fraud_metrics": {
+    "roc_auc": 0.9736594049066816,
+    "pr_auc": 0.8092887228895761,
+    "at_threshold_0_50": {
+      "accuracy": 0.9993127268882388,
+      "precision": 0.7978723404255319,
+      "recall": 0.7894736842105263,
+      "f1_score": 0.7936507936507936,
+      "specificity": 0.9996646131577553,
+      "fpr": 0.0003353868422446206,
+      "fnr": 0.21052631578947367,
+      "tp": 75,
+      "tn": 56632,
+      "fp": 19,
+      "fn": 20
+    },
+    "threshold_sweep": [
+      {
+        "threshold": 0.3,
+        "precision": 0.6290322580645161,
+        "recall": 0.8210526315789474,
+        "f1_score": 0.7123287671232876,
+        "accuracy": 0.9988897895886935,
+        "fpr": 0.0008119891970132919,
+        "fnr": 0.17894736842105263,
+        "specificity": 0.9991880108029867,
+        "tp": 78,
+        "tn": 56605,
+        "fp": 46,
+        "fn": 17
+      },
+      {
+        "threshold": 0.4,
+        "precision": 0.7169811320754716,
+        "recall": 0.8,
+        "f1_score": 0.7562189054726368,
+        "accuracy": 0.9991365030134283,
+        "fpr": 0.0005295581719651904,
+        "fnr": 0.2,
+        "specificity": 0.9994704418280348,
+        "tp": 76,
+        "tn": 56621,
+        "fp": 30,
+        "fn": 19
+      },
+      {
+        "threshold": 0.5,
+        "precision": 0.7978723404255319,
+        "recall": 0.7894736842105263,
+        "f1_score": 0.7936507936507936,
+        "accuracy": 0.9993127268882388,
+        "fpr": 0.0003353868422446206,
+        "fnr": 0.21052631578947367,
+        "specificity": 0.9996646131577553,
+        "tp": 75,
+        "tn": 56632,
+        "fp": 19,
+        "fn": 20
+      },
+      {
+        "threshold": 0.6,
+        "precision": 0.8152173913043478,
+        "recall": 0.7894736842105263,
+        "f1_score": 0.8021390374331551,
+        "accuracy": 0.9993479716632009,
+        "fpr": 0.00030008296411360787,
+        "fnr": 0.21052631578947367,
+        "specificity": 0.9996999170358863,
+        "tp": 75,
+        "tn": 56634,
+        "fp": 17,
+        "fn": 20
+      },
+      {
+        "threshold": 0.7,
+        "precision": 0.8409090909090909,
+        "recall": 0.7789473684210526,
+        "f1_score": 0.8087431693989071,
+        "accuracy": 0.9993832164381631,
+        "fpr": 0.0002471271469170888,
+        "fnr": 0.22105263157894736,
+        "specificity": 0.9997528728530829,
+        "tp": 74,
+        "tn": 56637,
+        "fp": 14,
+        "fn": 21
+      },
+      {
+        "threshold": 0.75,
+        "precision": 0.8705882352941177,
+        "recall": 0.7789473684210526,
+        "f1_score": 0.8222222222222222,
+        "accuracy": 0.9994360836006062,
+        "fpr": 0.0001941713297205698,
+        "fnr": 0.22105263157894736,
+        "specificity": 0.9998058286702795,
+        "tp": 74,
+        "tn": 56640,
+        "fp": 11,
+        "fn": 21
+      },
+      {
+        "threshold": 0.8,
+        "precision": 0.8809523809523809,
+        "recall": 0.7789473684210526,
+        "f1_score": 0.8268156424581006,
+        "accuracy": 0.9994537059880872,
+        "fpr": 0.00017651939065506346,
+        "fnr": 0.22105263157894736,
+        "specificity": 0.9998234806093449,
+        "tp": 74,
+        "tn": 56641,
+        "fp": 10,
+        "fn": 21
+      },
+      {
+        "threshold": 0.9,
+        "precision": 0.9125,
+        "recall": 0.7684210526315789,
+        "f1_score": 0.8342857142857143,
+        "accuracy": 0.9994889507630493,
+        "fpr": 0.0001235635734585444,
+        "fnr": 0.23157894736842105,
+        "specificity": 0.9998764364265414,
+        "tp": 73,
+        "tn": 56644,
+        "fp": 7,
+        "fn": 22
+      }
+    ]
+  },
+  "behavior_model": {
+    "samples_evaluated": 2000,
+    "mean_score": 0.4689914814547777,
+    "std_score": 0.01983913273670362,
+    "min_score": 0.3674212407238201,
+    "max_score": 0.5003262489699452,
+    "percentiles": {
+      "p10": 0.4588247236255982,
+      "p25": 0.4656263958985344,
+      "p50": 0.4721447872733545,
+      "p75": 0.4781293198971177,
+      "p90": 0.48591410326540563,
+      "p95": 0.48971921330063517,
+      "p99": 0.494475921893424
+    },
+    "flagged_ratio_pct": 0.05
+  },
+  "latency_benchmarks": {
+    "single": {
+      "iterations": 1000,
+      "mean_ms": 43.359805496000774,
+      "median_p50_ms": 37.29878749999216,
+      "p90_ms": 73.57729650001943,
+      "p95_ms": 84.16000870000744,
+      "p99_ms": 106.40944918999878,
+      "throughput_qps": 23.062834082413804,
+      "preproc_avg_ms": 11.578146902000414,
+      "raw_inference_avg_ms": 13.594347674999765
+    },
+    "batch": {
+      "10": {
+        "batch_latency_ms": 33.22140390000072,
+        "throughput_qps": 301.01075891015495
+      },
+      "50": {
+        "batch_latency_ms": 47.21236675,
+        "throughput_qps": 1059.044556371451
+      },
+      "100": {
+        "batch_latency_ms": 62.96550754999827,
+        "throughput_qps": 1588.1711097237512
+      },
+      "500": {
+        "batch_latency_ms": 128.84858335000047,
+        "throughput_qps": 3880.5238443469325
+      }
+    }
+  },
+  "feature_importance": {
+    "top_20": [
+      {
+        "feature": "f37",
+        "importance": 0.49241453409194946
+      },
+      {
+        "feature": "f13",
+        "importance": 0.131625697016716
+      },
+      {
+        "feature": "f36",
+        "importance": 0.02599266730248928
+      },
+      {
+        "feature": "f16",
+        "importance": 0.01930990070104599
+      },
+      {
+        "feature": "f11",
+        "importance": 0.01801888644695282
+      },
+      {
+        "feature": "f3",
+        "importance": 0.017084047198295593
+      },
+      {
+        "feature": "f35",
+        "importance": 0.016355494037270546
+      },
+      {
+        "feature": "f38",
+        "importance": 0.015997610986232758
+      },
+      {
+        "feature": "f9",
+        "importance": 0.01451791450381279
+      },
+      {
+        "feature": "f42",
+        "importance": 0.0113869309425354
+      },
+      {
+        "feature": "f7",
+        "importance": 0.01026723813265562
+      },
+      {
+        "feature": "f40",
+        "importance": 0.009855871088802814
+      },
+      {
+        "feature": "f19",
+        "importance": 0.009638641029596329
+      },
+      {
+        "feature": "f15",
+        "importance": 0.009633481502532959
+      },
+      {
+        "feature": "f39",
+        "importance": 0.00951582845300436
+      },
+      {
+        "feature": "f4",
+        "importance": 0.009513738565146923
+      },
+      {
+        "feature": "f20",
+        "importance": 0.00944241788238287
+      },
+      {
+        "feature": "f18",
+        "importance": 0.008896143175661564
+      },
+      {
+        "feature": "f12",
+        "importance": 0.008621960878372192
+      },
+      {
+        "feature": "f22",
+        "importance": 0.008602963760495186
+      }
+    ],
+    "shap_active": true
+  },
+  "robustness": [
+    {
+      "test_name": "Micro Amount ($0.001)",
+      "status": "PASS",
+      "fraud_probability": 0.0018165592337027192,
+      "is_fraud": false,
+      "error": null
+    },
+    {
+      "test_name": "Extreme Large Amount ($5,000,000.00)",
+      "status": "PASS",
+      "fraud_probability": 0.002057659439742565,
+      "is_fraud": false,
+      "error": null
+    },
+    {
+      "test_name": "All Zero Features",
+      "status": "PASS",
+      "fraud_probability": 0.0018165592337027192,
+      "is_fraud": false,
+      "error": null
+    },
+    {
+      "test_name": "Extreme Negative V-Features (-50.0)",
+      "status": "PASS",
+      "fraud_probability": 0.0826030895113945,
+      "is_fraud": false,
+      "error": null
+    },
+    {
+      "test_name": "Extreme Positive V-Features (+50.0)",
+      "status": "PASS",
+      "fraud_probability": 0.0010643465211614966,
+      "is_fraud": false,
+      "error": null
+    },
+    {
+      "test_name": "Missing All Optional V-Features",
+      "status": "PASS",
+      "fraud_probability": 0.002057659439742565,
+      "is_fraud": false,
+      "error": null
+    },
+    {
+      "test_name": "Unusual Field Types (Strings coerced)",
+      "status": "PASS",
+      "fraud_probability": 0.001936090993694961,
+      "is_fraud": false,
+      "error": null
+    }
+  ]
+}

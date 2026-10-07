@@ -1,0 +1,52 @@
+{
+  "model_name": "CreditFraudXGBoost",
+  "model_version": "2.0.0",
+  "trained_at": "2026-10-06T12:02:05Z",
+  "dataset_records_clean": 283726,
+  "dataset_records_raw": 284807,
+  "duplicates_removed": 1081,
+  "train_samples": 226980,
+  "test_samples": 56746,
+  "train_duration_sec": 6.69,
+  "random_state": 42,
+  "scale_pos_weight": 15.0,
+  "cv_5fold": {
+    "mean_pr_auc": 0.8524,
+    "std_pr_auc": 0.0286,
+    "mean_roc_auc": 0.9818,
+    "mean_f1": 0.8628
+  },
+  "test_metrics": {
+    "pr_auc": 0.8097,
+    "roc_auc": 0.9737,
+    "optimal_threshold": 0.5242,
+    "f1_optimal": 0.8409,
+    "precision_optimal": 0.9136,
+    "recall_optimal": 0.7789,
+    "f1_at_50": 0.8409,
+    "precision_at_50": 0.9136,
+    "recall_at_50": 0.7789,
+    "confusion_matrix": [
+      [
+        56644,
+        7
+      ],
+      [
+        21,
+        74
+      ]
+    ]
+  },
+  "xgb_hyperparameters": {
+    "n_estimators": 200,
+    "max_depth": 5,
+    "learning_rate": 0.05,
+    "subsample": 0.8,
+    "colsample_bytree": 0.8,
+    "scale_pos_weight": 15.0,
+    "random_state": 42,
+    "eval_metric": "aucpr",
+    "n_jobs": -1,
+    "tree_method": "hist"
+  }
+}

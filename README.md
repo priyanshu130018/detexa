@@ -1,231 +1,285 @@
-# 🛡️ Detexa – AI-Powered Fraud Detection Platform
+# 🛡️ Detexa – Real-Time Banking Fraud Detection Platform
 
-> Production-ready fraud detection system with credit-card fraud scoring, behavioural anomaly detection, SHAP explainability, and a modern dark-mode Streamlit dashboard.
+Detexa is an enterprise-grade, real-time banking fraud detection and risk scoring platform. It combines distributed event streaming, stateful stream processing, graph-based relationship intelligence, in-memory feature stores, and explainable machine learning models to intercept fraudulent financial transactions with sub-35ms latency.
 
 ---
 
-## 🗂️ Project Structure
+## 🏛️ System Architecture
+
+```
+                                  DETEXA PLATFORM ARCHITECTURE
+
+  ┌──────────────────┐       ┌─────────────────┐       ┌────────────────────────┐
+  │   React + Vite   │ <───> │ FastAPI Backend │ ────> │  Apache Kafka Broker   │
+  │ Frontend (TSX)   │ (SSE) │  REST & WS Hub  │       │ (detexa.transactions)  │
+  └──────────────────┘       └─────────────────┘       └───────────┬────────────┘
+           ▲                          │                            │
+           │                          ▼                            ▼
+           │                 ┌─────────────────┐       ┌────────────────────────┐
+           │ (REST / Auth)   │  Redis Feature  │       │ Apache Flink Processor │
+           │                 │   Store & TTL   │ <───> │   (Windowed Velocity)  │
+           │                 └─────────────────┘       └───────────┬────────────┘
+           │                          ▲                            │
+           ▼                          ▼                            ▼
+  ┌──────────────────┐       ┌─────────────────┐       ┌────────────────────────┐
+  │ Neon PostgreSQL  │ <───> │  Neo4j Graph DB │ <───> │ ML Inference & Decision│
+  │ Relational DB    │       │ (Device / Link) │       │ (XGBoost + SHAP + IF)  │
+  └──────────────────┘       └─────────────────┘       └────────────────────────┘
+```
+
+### End-to-End Data Flow
+
+$$\text{Transaction Event} \longrightarrow \text{FastAPI Ingestion} \longrightarrow \text{Kafka Raw Topic} \longrightarrow \text{Flink Stream Processor} \longrightarrow \text{Redis / Neo4j Feature Store} \longrightarrow \text{ML Inference (XGBoost + IF)} \longrightarrow \text{Decision Engine} \longrightarrow \text{Neon PostgreSQL} \longrightarrow \text{WebSocket / SSE Broadcast} \longrightarrow \text{React Dashboard}$$
+
+---
+
+## 🚦 Decision Engine Outcomes
+
+Every transaction evaluated by Detexa is routed to one of four authoritative decision states:
+
+| Outcome | Risk Level | Description | Action Taken |
+| :--- | :--- | :--- | :--- |
+| **`ALLOW`** | **Low** | Legitimate transaction passing all behavioral, velocity, and ML checks. | Approved immediately. |
+| **`CHALLENGE`** | **Medium** | Elevated anomaly or velocity score; suspicious IP or unseen device. | Step-up authentication (OTP / 2FA / biometric). |
+| **`REVIEW`** | **High** | High fraud probability, network risk indicators, or pattern anomalies. | Queued into Fraud Analyst triage console. |
+| **`BLOCK`** | **Critical** | Velocity burst ($\ge 5\text{ tx/min}$), TOR/VPN high-risk node, graph link fraud ring, or critical ML score ($\ge 0.85$). | Automated instant decline & alert generation. |
+
+---
+
+## 📂 Project Structure
 
 ```
 detexa/
-├── api/                        # FastAPI backend
-│   ├── main.py                 # App factory & lifespan hooks
-│   ├── middleware/
-│   │   └── auth_middleware.py  # JWT Bearer dependency
-│   └── routers/
-│       ├── auth.py             # /auth/register, /auth/login, /auth/me
-│       ├── predict.py          # /predict/credit, /predict/behavior
-│       └── alerts.py           # /alerts, /alerts/stats, /alerts/transactions
-│
-├── core/                       # Shared configuration & utilities
-│   ├── config.py               # Pydantic-Settings (reads .env)
-│   ├── security.py             # JWT + bcrypt helpers
-│   └── logging.py              # Loguru structured logger
-│
-├── database/                   # SQLAlchemy ORM layer
-│   ├── db.py                   # Engine, session factory, get_db dependency
-│   └── models.py               # users, transactions, behavior_logs, alerts, prediction_logs
-│
-├── models/                     # Pydantic v2 request / response schemas
-│   └── schemas.py
-│
-├── services/                   # Business logic layer
-│   ├── auth_service.py
-│   ├── fraud_service.py
-│   ├── behavior_service.py
-│   └── alert_service.py
-│
-├── ml/                         # Machine learning
-│   ├── models/
-│   │   ├── credit_fraud_model.py   # XGBoost / RF wrapper + SHAP
-│   │   └── behavior_model.py       # Isolation Forest wrapper
-│   └── pipelines/
-│       └── feature_engineering.py  # Credit & behaviour feature pipelines
-│
-├── dashboard/                  # Streamlit frontend
-│   ├── app.py                  # Entry point – auth gate + sidebar nav
-│   ├── api_client.py           # HTTP client for backend calls
-│   └── views/
-│       ├── login.py            # Login / Register UI
-│       ├── overview.py         # Main dashboard – KPIs, daily/monthly charts
-│       ├── transactions.py     # Filterable transaction table
-│       ├── alerts_page.py      # Alert management
-│       ├── predict_page.py     # Live prediction testing
-│       └── behavior_page.py    # Behaviour analytics
-│
-├── scripts/
-│   ├── train_models.py         # Train credit + behaviour models
-│   └── seed_data.py            # Populate DB with demo data
-│
-├── alembic/                    # Database migrations
-│   └── env.py
-│
-├── docker/
-│   ├── Dockerfile.api
-│   └── Dockerfile.dashboard
-│
-├── tests/                      # Pytest test suite (add your tests here)
-├── docker-compose.yml
-├── alembic.ini
-├── requirements.txt
-└── .env.example
+├── backend/
+│   ├── alembic/                      # Database migrations & versions
+│   │   ├── versions/
+│   │   │   └── 0001_initial_neon_schema.py
+│   │   └── env.py
+│   ├── app/
+│   │   ├── api/                      # REST API endpoints & route handlers
+│   │   │   └── v1/endpoints/         # auth, predict, streaming, alerts, transactions
+│   │   ├── core/                     # Configuration, security (JWT/bcrypt), logging, Redis/Neo4j clients
+│   │   ├── db/                       # SQLAlchemy models & database session setup
+│   │   ├── decision/                 # Multi-rule Decision Engine & risk calculators
+│   │   ├── feature_store/            # Redis feature store & sliding-window velocity aggregators
+│   │   ├── features/                 # Dynamic canonical feature builder
+│   │   ├── graph/                    # Neo4j Cypher queries & link analysis repository
+│   │   ├── ml/                       # XGBoost credit fraud & Isolation Forest behavior models + SHAP
+│   │   │   ├── models/               # Model inference classes
+│   │   │   ├── pipelines/            # Feature engineering pipelines
+│   │   │   └── saved/                # Production model artifacts (.pkl)
+│   │   ├── models/                   # Core domain & metadata models
+│   │   ├── schemas/                  # Pydantic v2 request/response schemas
+│   │   ├── services/                 # Orchestration (fraud, behavior, alert, auth, streaming)
+│   │   └── streaming/                # Kafka event producer, consumer & schemas
+│   ├── data/                         # Evaluation benchmarks (dataset ignored by Git)
+│   ├── flink/                        # Apache Flink stream worker & sliding-window job definitions
+│   │   ├── config.py
+│   │   └── run_job.py
+│   ├── scripts/                      # Data generation, seeding & offline model training scripts
+│   ├── tests/                        # Backend test suite
+│   ├── Dockerfile                    # Multi-stage production Dockerfile
+│   ├── entrypoint.sh                 # Container startup with automated Alembic migration
+│   ├── requirements.txt              # Python runtime dependencies
+│   └── test_integration_all.py       # Full Docker integration & resiliency test suite
+├── frontend/
+│   ├── src/
+│   │   ├── components/               # Navbar, charts, modals, data tables
+│   │   ├── pages/                    # Overview, Transactions, Alerts, Live Predict, Behavior, Graph
+│   │   └── services/                 # API client, WebSocket & SSE consumers
+│   ├── package.json                  # React + Vite dependencies
+│   ├── tailwind.config.js            # Tailwind CSS styling configuration
+│   └── vite.config.ts                # Vite build configuration
+├── docker-compose.yml                # Multi-container orchestration (Backend, Frontend, Kafka, Flink, Redis, Neo4j)
+├── .env.example                      # Environment configuration template
+├── .gitignore                        # Git exclusion rules (CSVs, logs, credentials ignored)
+├── requirements.txt                  # Root-synchronized Python dependencies
+└── README.md                         # Platform documentation
 ```
 
 ---
 
-## ⚡ Quick Start
+## ⚙️ Core Implemented Features
 
-### 1 – Prerequisites
+- **Sub-35ms Real-Time Inference:** Direct in-place XGBoost C++ Booster evaluation with active caching for high-throughput transaction authorization (`/api/v1/predict/realtime`).
+- **Distributed Event Ingestion:** Asynchronous publication to Kafka topic `detexa.transactions.raw` with automatic deduplication and partitioning (`/api/v1/streaming/transactions`).
+- **Stateful Flink Stream Processing:** Continuous tumbling and sliding window calculations ($1\text{m}, 5\text{m}, 1\text{h}$) computing transaction velocity, amount deviation ratios, and merchant diversity.
+- **Graph Link Analysis with Neo4j:** Real-time Cypher entity graph queries evaluating shared device fingerprints, card networks, and fraud rings across users.
+- **Sub-Millisecond Redis Feature Store:** In-memory sorted-set sliding window trackers and key-value cache for user profiles and velocity features.
+- **Explainable Machine Learning:**
+  - **Credit Card Fraud Classifier:** Supervised XGBoost model with SHAP `TreeExplainer` computing real-time feature attribution.
+  - **Behavioral Anomaly Detector:** Unsupervised Isolation Forest analyzing login hours, typing velocity, mouse jitter, failed logins, and VPN/TOR network signatures.
+- **Multi-Table Relational Persistence:** 11 normalized PostgreSQL tables managed through Alembic migrations (`users`, `transactions`, `devices`, `ip_addresses`, `merchants`, `fraud_alerts`, `fraud_predictions`, `behavior_logs`, `audit_logs`, `model_metadata`).
+- **Live React + TypeScript Dashboard:** Dark-mode analytics UI displaying real-time metrics, interactive transaction inspector, alert triage management, live prediction playground, and WebSocket activity stream.
 
-- Python 3.11+
-- PostgreSQL 14+
-- Redis 7+ (optional – used for caching)
-- Docker + Docker Compose (for containerised deployment)
+---
 
-### 2 – Local Setup
+## 📊 Dataset & Kaggle Download Instructions
+
+> [!IMPORTANT]
+> The banking transaction dataset is **NOT** included in the Git repository and must be downloaded separately.
+
+### Expected Dataset Details
+- **Dataset Name:** `indian_banking_transactions.csv`
+- **Expected Directory:** `data/raw/` (or `backend/data/`)
+- **Target File Path:** `data/raw/indian_banking_transactions.csv`
+
+### Step-by-Step Setup:
+1. Download `indian_banking_transactions.csv` from Kaggle.
+2. Create the raw data directory in your project root:
+   ```bash
+   mkdir -p data/raw
+   ```
+3. Place the downloaded CSV file into `data/raw/`:
+   ```bash
+   cp /path/to/downloaded/indian_banking_transactions.csv data/raw/indian_banking_transactions.csv
+   ```
+4. Run the training or preprocessing pipeline if retraining models:
+   ```bash
+   python backend/scripts/train_models.py
+   ```
+
+*(If the CSV is not supplied, built-in synthetic data generators enable immediate functional testing without manual downloads).*
+
+---
+
+## 🔧 Environment Configuration
+
+Copy the example environment configuration to create your local `.env`:
 
 ```bash
-# Clone and enter the project
-cd detexa
+cp .env.example .env
+cp .env.example backend/.env
+```
 
-# Create virtual environment
+### Key Environment Variables
+
+| Variable | Default / Example Value | Description |
+| :--- | :--- | :--- |
+| `APP_ENV` | `development` | Application environment (`development` / `production`). |
+| `DATABASE_URL` | `postgresql://user:pass@ep-xxx.neon.tech/detexa?sslmode=require` | PostgreSQL / Neon connection string. |
+| `REDIS_URL` | `redis://redis:6379/0` (or `redis://localhost:6379/0`) | Redis feature store URL. |
+| `KAFKA_BOOTSTRAP_SERVERS` | `kafka:9092` (or `localhost:29092`) | Kafka broker address. |
+| `NEO4J_URI` | `bolt://neo4j:7687` (or `bolt://localhost:7687`) | Neo4j Bolt protocol URI. |
+| `NEO4J_USER` | `neo4j` | Neo4j database user. |
+| `NEO4J_PASSWORD` | `detexa_neo4j_password` | Neo4j database password. |
+| `FLINK_JOBMANAGER_HOST`| `flink-jobmanager` (or `localhost`) | Apache Flink JobManager host. |
+| `FLINK_JOBMANAGER_PORT`| `8081` | Apache Flink REST API port. |
+| `SECRET_KEY` | `detexa-super-secret-key-...` | Secret key used for JWT tokens. |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | `60` | JWT token expiration duration. |
+| `FRAUD_THRESHOLD` | `0.60` | Score threshold for `REVIEW` / `CHALLENGE`. |
+| `HIGH_RISK_THRESHOLD`| `0.85` | Score threshold for automated `BLOCK`. |
+
+---
+
+## 🚀 Quick Start with Docker (Recommended)
+
+Start the entire distributed stack with a single command:
+
+```bash
+docker compose up --build -d
+```
+
+### Running Services
+
+| Service | Container Name | URL / Port | Purpose |
+| :--- | :--- | :--- | :--- |
+| **Frontend Dashboard** | `detexa_frontend` | [http://localhost:5173](http://localhost:5173) | React + TypeScript UI |
+| **FastAPI Backend** | `detexa_backend` | [http://localhost:8000/docs](http://localhost:8000/docs) | Interactive Swagger OpenAPI |
+| **Flink JobManager** | `detexa_flink_jobmanager`| [http://localhost:8081](http://localhost:8081) | Flink cluster & streaming metrics |
+| **Flink TaskManager** | `detexa_flink_taskmanager`| Internal (4 slots) | Flink distributed compute slots |
+| **Flink Stream Worker**| `detexa_flink_worker` | Internal | Kafka stream consumer & window processor |
+| **Apache Kafka** | `detexa_kafka` | `localhost:9092` / `localhost:29092`| Distributed event broker |
+| **Redis** | `detexa_redis` | `localhost:6379` | Feature store & sliding-window cache |
+| **Neo4j Browser** | `detexa_neo4j` | [http://localhost:7474](http://localhost:7474) | Graph database visualizer |
+
+Check status of all running containers:
+```bash
+docker compose ps
+```
+
+---
+
+## 💻 Running Locally (Without Docker)
+
+### 1. Backend Setup
+
+```bash
+# Navigate to backend directory
+cd backend
+
+# Create and activate virtual environment
 python -m venv .venv
-source .venv/bin/activate          
-# Windows: .venv\Scripts\activate
+source .venv/bin/activate       # Linux/macOS
+# .venv\Scripts\activate       # Windows PowerShell
 
 # Install dependencies
 pip install -r requirements.txt
 
-# Configure environment
-cp .env.example .env
-# Edit .env with your DATABASE_URL, SECRET_KEY, etc.
+# Run database migrations
+alembic upgrade head
 
-# Create DB tables
-python -c "from database.db import engine; from database.models import Base; Base.metadata.create_all(engine)"
-
-# Train ML models (uses synthetic data if Kaggle CSV not supplied)
-python scripts/train_models.py
-
-# (Optional) Supply the real Kaggle dataset for better accuracy:
-# python scripts/train_models.py --data /path/to/creditcard.csv
-
-# Seed demo data
-python scripts/seed_data.py
-
-# Start FastAPI backend
-uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
-
-# In a second terminal, start Streamlit dashboard
-streamlit run dashboard/app.py
+# Start FastAPI server
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Open:
-- **Dashboard:** http://localhost:8501
-- **API docs:** http://localhost:8000/docs
-- **Demo login:** `admin@detexa.io` / `Admin@1234`
-
----
-
-### 3 – Docker Compose (full stack)
+### 2. Frontend Setup
 
 ```bash
-docker compose up --build
+# In a second terminal, navigate to frontend directory
+cd frontend
+
+# Install Node dependencies
+npm install
+
+# Start Vite development server
+npm run dev
 ```
 
-Services started:
-| Service | Port |
-|---------|------|
-| PostgreSQL | 5432 |
-| Redis | 6379 |
-| FastAPI API | 8000 |
-| Streamlit Dashboard | 8501 |
+Open [http://localhost:5173](http://localhost:5173) in your browser.
 
 ---
 
-## 🤖 ML Models
+## 🧪 Running Integration Tests
 
-### Credit Card Fraud Detection
-- **Dataset:** [Kaggle Credit Card Fraud](https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud)
-- **Algorithm:** XGBoost (falls back to Random Forest if XGBoost not available)
-- **Imbalance handling:** SMOTE oversampling
-- **Explainability:** SHAP TreeExplainer (top-10 feature contributions per prediction)
-- **AUC-ROC:** ~0.98+ on the real Kaggle dataset
+Detexa includes a full end-to-end integration test suite that verifies PostgreSQL persistence, Redis features, Neo4j Cypher queries, Kafka publish/consume, ML inference, and streaming sync pipelines.
 
-### Behavioural Anomaly Detection
-- **Algorithm:** Isolation Forest
-- **Features:** login hour, typing speed, mouse velocity, VPN/TOR flags, device changes, failed logins
-- **Output:** Anomaly score [0, 1] (higher = more suspicious)
+### Run Tests Inside Docker Container:
 
-### Risk Levels
-| Score | Level |
-|-------|-------|
-| ≥ 0.75 | 🔴 High |
-| ≥ 0.50 | 🟡 Medium |
-| < 0.50 | 🟢 Low |
-
----
-
-## 🔌 API Endpoints
-
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/api/v1/auth/register` | Create account |
-| POST | `/api/v1/auth/login` | Get JWT token |
-| GET | `/api/v1/auth/me` | Current user |
-| POST | `/api/v1/predict/credit` | Credit fraud score |
-| POST | `/api/v1/predict/behavior` | Behaviour anomaly score |
-| GET | `/api/v1/alerts` | List alerts |
-| PUT | `/api/v1/alerts/{id}/status` | Update alert status |
-| GET | `/api/v1/alerts/stats` | Dashboard statistics |
-| GET | `/api/v1/alerts/transactions` | Transaction list |
-
----
-
-## 🗄️ Database Schema
-
+```bash
+docker exec detexa_backend python test_integration_all.py
 ```
-users              – id, name, email, mobile, hashed_password, is_admin
-transactions       – id, user_id, amount, V1–V28, merchant, fraud_score, risk_level, is_fraud
-behavior_logs      – id, user_id, session_id, ip_address, device_fingerprint, anomaly_score
-alerts             – id, user_id, transaction_id, alert_type, risk_level, score, status
-prediction_logs    – id, endpoint, fraud_score, latency_ms, model_version
+
+### Run Unit Tests with Pytest:
+
+```bash
+pytest backend/tests -v
 ```
 
 ---
 
-## 📊 Dashboard Pages
+## 🔌 API Reference Overview
 
-| Page | Description |
-|------|-------------|
-| **Overview** | KPI cards, daily transaction bar chart, monthly report, risk distribution doughnut |
-| **Transactions** | Filterable table with fraud row highlighting, CSV export |
-| **Alerts** | Alert cards with status management, timeline area chart |
-| **Live Predict** | Interactive credit fraud + behaviour prediction forms with score gauge |
-| **Behaviour** | IP/device analytics, country heatmap, anomaly histogram |
-
----
-
-## 🔐 Authentication
-
-- JWT Bearer tokens (HS256)
-- bcrypt password hashing
-- Access tokens expire after 60 minutes (configurable via `ACCESS_TOKEN_EXPIRE_MINUTES`)
-
----
-
-## 🚀 Production Checklist
-
-- [ ] Change `SECRET_KEY` in `.env` (min 32 chars, random)
-- [ ] Use Alembic migrations instead of `create_all`
-- [ ] Train on real Kaggle dataset: `python scripts/train_models.py --data creditcard.csv`
-- [ ] Enable Redis caching (`REDIS_URL` in `.env`)
-- [ ] Set `APP_ENV=production`
-- [ ] Configure reverse proxy (Nginx) in front of both services
-- [ ] Set up log rotation and monitoring (Prometheus / Grafana)
-- [ ] Enable HTTPS (TLS termination at Nginx or load balancer)
+| Method | Endpoint | Description | Auth Required |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/api/v1/auth/login` | Authenticate user and receive JWT Bearer token | No |
+| `POST` | `/api/v1/auth/register` | Register new user account | No |
+| `GET` | `/api/v1/auth/me` | Fetch authenticated user profile | Yes |
+| `POST` | `/api/v1/predict/credit` | Full credit card fraud evaluation with SHAP explainability | Yes |
+| `POST` | `/api/v1/predict/behavior`| Behavioral session anomaly scoring (Isolation Forest) | Yes |
+| `POST` | `/api/v1/predict/realtime`| Ultra-low-latency real-time fraud scoring (<35ms) | Yes |
+| `POST` | `/api/v1/streaming/transactions` | Asynchronous transaction ingestion into Kafka raw topic | Yes |
+| `POST` | `/api/v1/streaming/transactions/process-sync` | End-to-end sync execution through Flink & ML pipeline | Yes |
+| `GET` | `/api/v1/alerts` | List and filter fraud alerts | Yes |
+| `PUT` | `/api/v1/alerts/{id}/status` | Update alert triage status (`OPEN`, `REVIEWED`, `RESOLVED`) | Yes |
+| `GET` | `/api/v1/alerts/stats` | Retrieve aggregate fraud KPIs & risk metrics | Yes |
+| `GET` | `/api/v1/transactions` | Query recent persisted transactions | Yes |
+| `WS` | `/api/v1/streaming/ws/dashboard` | WebSocket stream for live real-time dashboard events | No |
+| `GET` | `/api/v1/streaming/events/stream` | Server-Sent Events (SSE) stream for transactions | No |
+| `GET` | `/health` | Healthcheck endpoint reporting system status | No |
 
 ---
 
 ## 📄 License
 
-MIT – use freely, attribute kindly.
+MIT License. Designed and engineered for high-throughput, low-latency financial fraud detection.

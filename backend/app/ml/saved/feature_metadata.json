@@ -1,0 +1,222 @@
+{
+  "engineered_feature_count": 43,
+  "feature_names": [
+    "V1",
+    "V2",
+    "V3",
+    "V4",
+    "V5",
+    "V6",
+    "V7",
+    "V8",
+    "V9",
+    "V10",
+    "V11",
+    "V12",
+    "V13",
+    "V14",
+    "V15",
+    "V16",
+    "V17",
+    "V18",
+    "V19",
+    "V20",
+    "V21",
+    "V22",
+    "V23",
+    "V24",
+    "V25",
+    "V26",
+    "V27",
+    "V28",
+    "Amount",
+    "log_amount",
+    "amount_sq",
+    "hour_of_day",
+    "sin_time",
+    "cos_time",
+    "is_night_txn",
+    "V14_V17_interaction",
+    "V12_V10_interaction",
+    "V14_V12_interaction",
+    "V17_V12_interaction",
+    "V4_V11_interaction",
+    "V1_V2_interaction",
+    "V3_V7_interaction",
+    "v_norm"
+  ],
+  "top_features": [
+    {
+      "name": "V14_V12_interaction",
+      "importance": 0.49241
+    },
+    {
+      "name": "V14",
+      "importance": 0.13163
+    },
+    {
+      "name": "V12_V10_interaction",
+      "importance": 0.02599
+    },
+    {
+      "name": "V17",
+      "importance": 0.01931
+    },
+    {
+      "name": "V12",
+      "importance": 0.01802
+    },
+    {
+      "name": "V4",
+      "importance": 0.01708
+    },
+    {
+      "name": "V14_V17_interaction",
+      "importance": 0.01636
+    },
+    {
+      "name": "V17_V12_interaction",
+      "importance": 0.016
+    },
+    {
+      "name": "V10",
+      "importance": 0.01452
+    },
+    {
+      "name": "v_norm",
+      "importance": 0.01139
+    },
+    {
+      "name": "V8",
+      "importance": 0.01027
+    },
+    {
+      "name": "V1_V2_interaction",
+      "importance": 0.00986
+    },
+    {
+      "name": "V20",
+      "importance": 0.00964
+    },
+    {
+      "name": "V16",
+      "importance": 0.00963
+    },
+    {
+      "name": "V4_V11_interaction",
+      "importance": 0.00952
+    },
+    {
+      "name": "V5",
+      "importance": 0.00951
+    },
+    {
+      "name": "V21",
+      "importance": 0.00944
+    },
+    {
+      "name": "V19",
+      "importance": 0.0089
+    },
+    {
+      "name": "V13",
+      "importance": 0.00862
+    },
+    {
+      "name": "V23",
+      "importance": 0.0086
+    },
+    {
+      "name": "Amount",
+      "importance": 0.00856
+    },
+    {
+      "name": "V3_V7_interaction",
+      "importance": 0.00837
+    },
+    {
+      "name": "V25",
+      "importance": 0.00801
+    },
+    {
+      "name": "V7",
+      "importance": 0.00796
+    },
+    {
+      "name": "V11",
+      "importance": 0.00792
+    },
+    {
+      "name": "V24",
+      "importance": 0.00757
+    },
+    {
+      "name": "V18",
+      "importance": 0.00741
+    },
+    {
+      "name": "log_amount",
+      "importance": 0.00718
+    },
+    {
+      "name": "V15",
+      "importance": 0.0068
+    },
+    {
+      "name": "hour_of_day",
+      "importance": 0.00646
+    },
+    {
+      "name": "V27",
+      "importance": 0.00643
+    },
+    {
+      "name": "V9",
+      "importance": 0.00635
+    },
+    {
+      "name": "V1",
+      "importance": 0.00615
+    },
+    {
+      "name": "V26",
+      "importance": 0.00612
+    },
+    {
+      "name": "amount_sq",
+      "importance": 0.0061
+    },
+    {
+      "name": "cos_time",
+      "importance": 0.00564
+    },
+    {
+      "name": "V3",
+      "importance": 0.00558
+    },
+    {
+      "name": "V2",
+      "importance": 0.00558
+    },
+    {
+      "name": "V22",
+      "importance": 0.00528
+    },
+    {
+      "name": "V6",
+      "importance": 0.00481
+    },
+    {
+      "name": "sin_time",
+      "importance": 0.00474
+    },
+    {
+      "name": "V28",
+      "importance": 0.00428
+    },
+    {
+      "name": "is_night_txn",
+      "importance": 0.0
+    }
+  ]
+}
