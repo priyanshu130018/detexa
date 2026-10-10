@@ -11,8 +11,11 @@ export interface TransactionQueryParams {
 
 export const transactionService = {
   async getTransactions(params?: TransactionQueryParams): Promise<Transaction[]> {
-    const response = await api.get<Transaction[]>('/transactions', { params });
-    return response.data;
+    const response = await api.get<any>('/transactions', { params });
+    if (response.data && Array.isArray(response.data.items)) {
+      return response.data.items;
+    }
+    return Array.isArray(response.data) ? response.data : [];
   },
 
   async getTransactionById(id: string): Promise<Transaction> {

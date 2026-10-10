@@ -17,6 +17,7 @@ import { useTheme } from '../context/ThemeContext';
 import { FraudRing, SubgraphData, GraphNode } from '../types';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
 import { RiskBadge } from '../components/common/RiskBadge';
+import { formatINR } from '../utils/formatters';
 
 const NODE_COLORS: Record<string, { bg: string; border: string; text: string; icon: any }> = {
   User: { bg: '#2563eb', border: '#3b82f6', text: '#ffffff', icon: Users },
@@ -54,19 +55,19 @@ export const GraphInvestigationPage: React.FC = () => {
           entity_type: searchType,
           depth: 2,
           nodes: [
-            { id: 'usr_1001', label: 'User', title: 'User: Alice M.', properties: { risk_level: 'High', fraud_txns: 2 } },
-            { id: 'usr_1002', label: 'User', title: 'User: Bob K.', properties: { risk_level: 'High', fraud_txns: 3 } },
-            { id: 'dev_fp_98a1', label: 'Device', title: 'Device: macOS-14.4', properties: { users_count: 3, is_trusted: false } },
-            { id: 'ip_198_51', label: 'IP', title: 'IP: 198.51.100.44', properties: { is_vpn: true, country: 'US' } },
-            { id: 'mer_stripe', label: 'Merchant', title: 'Merchant: Luxury Goods', properties: { category: 'Retail' } },
-            { id: 'txn_901', label: 'Transaction', title: 'Txn: $890.00', properties: { amount: 890, decision: 'BLOCK' } },
+            { id: 'usr_1001', label: 'User', title: 'User: Priya Sharma', properties: { risk_level: 'High', fraud_txns: 2 } },
+            { id: 'usr_1002', label: 'User', title: 'User: Aarav Patel', properties: { risk_level: 'High', fraud_txns: 3 } },
+            { id: 'dev_fp_98a1', label: 'Device', title: 'Device: Android-14-Samsung', properties: { users_count: 3, is_trusted: false } },
+            { id: 'ip_103_21', label: 'IP', title: 'IP: 103.21.124.5', properties: { is_vpn: true, country: 'IN', state: 'Maharashtra' } },
+            { id: 'mer_reliance', label: 'Merchant', title: 'Merchant: Reliance Digital', properties: { category: 'Electronics' } },
+            { id: 'txn_901', label: 'Transaction', title: 'Txn: ₹25,890.00', properties: { amount: 25890, decision: 'BLOCK' } },
           ],
           edges: [
             { source: 'usr_1001', target: 'dev_fp_98a1', type: 'USES_DEVICE', properties: {} },
             { source: 'usr_1002', target: 'dev_fp_98a1', type: 'USES_DEVICE', properties: {} },
-            { source: 'usr_1001', target: 'ip_198_51', type: 'USES_IP', properties: {} },
-            { source: 'usr_1002', target: 'ip_198_51', type: 'USES_IP', properties: {} },
-            { source: 'usr_1001', target: 'mer_stripe', type: 'TRANSACTED_WITH', properties: {} },
+            { source: 'usr_1001', target: 'ip_103_21', type: 'USES_IP', properties: {} },
+            { source: 'usr_1002', target: 'ip_103_21', type: 'USES_IP', properties: {} },
+            { source: 'usr_1001', target: 'mer_reliance', type: 'TRANSACTED_WITH', properties: {} },
             { source: 'usr_1001', target: 'txn_901', type: 'EXECUTED', properties: {} },
           ],
         });
@@ -386,7 +387,7 @@ export const GraphInvestigationPage: React.FC = () => {
                       {r.confirmed_fraud_count} txns
                     </td>
                     <td className="px-4 py-3 font-bold text-blue-600 dark:text-blue-400">
-                      ${r.total_fraud_amount ? r.total_fraud_amount.toFixed(2) : '0.00'}
+                      {formatINR(r.total_fraud_amount || 0)}
                     </td>
                     <td className="px-4 py-3">
                       <RiskBadge level={r.risk_level || 'High'} />

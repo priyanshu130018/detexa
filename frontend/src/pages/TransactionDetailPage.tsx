@@ -22,6 +22,7 @@ import { RiskBadge } from '../components/common/RiskBadge';
 import { SHAPChart } from '../components/common/SHAPChart';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
 import { Modal } from '../components/common/Modal';
+import { formatINR, formatIST } from '../utils/formatters';
 
 export const TransactionDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -69,7 +70,7 @@ export const TransactionDetailPage: React.FC = () => {
           category: tx.category || 'General',
           device_fingerprint: deviceFp,
           ip_address: ipAddr,
-          country: tx.country || 'US',
+          country: tx.country || 'IN',
         });
         if (hotData?.features) {
           setRedisHot(hotData.features);
@@ -169,14 +170,14 @@ export const TransactionDetailPage: React.FC = () => {
             <RiskBadge level={riskLevel} />
           </div>
           <h1 className="text-3xl font-black text-black dark:text-white tracking-tight pt-1">
-            ${transaction.amount.toFixed(2)}{' '}
+            {formatINR(transaction.amount)}{' '}
             <span className="text-base text-black/60 dark:text-white/60 font-normal font-mono">
-              {transaction.currency || 'USD'}
+              {transaction.currency || 'INR'}
             </span>
           </h1>
           <p className="text-xs text-black/60 dark:text-white/60 flex items-center gap-2">
             <Clock className="w-3.5 h-3.5 text-black/40 dark:text-white/40" />
-            <span>Processed: {new Date(transaction.timestamp).toUTCString()}</span>
+            <span>Processed: {formatIST(transaction.timestamp)}</span>
           </p>
         </div>
 
@@ -271,7 +272,7 @@ export const TransactionDetailPage: React.FC = () => {
               <div className="p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10">
                 <span className="text-black/60 dark:text-white/60 block text-[10px] uppercase font-bold">1h Amount Sum</span>
                 <span className="text-base font-bold text-blue-600 dark:text-blue-400 mt-1 block">
-                  ${redisHot?.amount_sum_1h ? Number(redisHot.amount_sum_1h).toFixed(2) : transaction.amount.toFixed(2)}
+                  {formatINR(redisHot?.amount_sum_1h ? Number(redisHot.amount_sum_1h) : transaction.amount)}
                 </span>
                 <span className="text-[10px] text-black/40 dark:text-white/40">Rolling total</span>
               </div>
@@ -404,10 +405,10 @@ export const TransactionDetailPage: React.FC = () => {
               <div className="p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 space-y-1">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] uppercase font-bold text-black/60 dark:text-white/60">IP & Geo Endpoint</span>
-                  <span className="text-[10px] text-black/40 dark:text-white/40 font-mono">{transaction.country || 'US'}</span>
+                  <span className="text-[10px] text-black/40 dark:text-white/40 font-mono">{transaction.state ? `${transaction.state}, India` : (transaction.country || 'IN')}</span>
                 </div>
                 <div className="text-xs font-mono text-black/80 dark:text-white/80">
-                  {transaction.ip_rel?.ip_address || '198.51.100.42'}
+                  {transaction.ip_rel?.ip_address || '103.21.124.5'}
                 </div>
                 <div className="flex gap-2 text-[10px] text-black/60 dark:text-white/60">
                   <span>VPN: {transaction.ip_rel?.is_vpn ? 'Yes' : 'No'}</span>

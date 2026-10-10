@@ -34,6 +34,7 @@ import { RiskBadge } from '../components/common/RiskBadge';
 import { DecisionBadge } from '../components/common/DecisionBadge';
 import { Modal } from '../components/common/Modal';
 import { SHAPChart } from '../components/common/SHAPChart';
+import { formatINR, formatIST, formatISTTime } from '../utils/formatters';
 
 const DECISION_COLORS: Record<string, string> = {
   ALLOW: '#2563eb',
@@ -51,36 +52,76 @@ export const OverviewPage: React.FC = () => {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
-  const [, setLoading] = useState(true);
+  const [statsLoading, setStatsLoading] = useState(true);
+  const [decStatsLoading, setDecStatsLoading] = useState(true);
+  const [alertsLoading, setAlertsLoading] = useState(true);
+  const [txnsLoading, setTxnsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [newlyArrivedTxId, setNewlyArrivedTxId] = useState<string | null>(null);
 
-  // Initial Snapshot Fetch
-  const fetchData = useCallback(async () => {
+  // Parallel, non-blocking independent widget fetchers
+  const fetchStats = useCallback(async () => {
     try {
-      setRefreshing(true);
-      const [statsData, decStatsData, alertsData, txnsData] = await Promise.all([
-        alertService.getDashboardStats().catch(() => null),
-        decisionService.getDecisionStats().catch(() => null),
-        alertService.getAlerts({ limit: 6 }).catch(() => []),
-        transactionService.getTransactions({ limit: 50 }).catch(() => []),
-      ]);
-
-      if (statsData) setStats(statsData);
-      if (decStatsData) setDecisionStats(decStatsData);
-      if (alertsData) setAlerts(alertsData);
-      if (txnsData) setTransactions(txnsData);
+      const data = await alertService.getDashboardStats();
+      if (data) setStats(data);
     } catch (err) {
-      console.error('Error loading dashboard data:', err);
+      console.error('Error loading KPI stats:', err);
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      setStatsLoading(false);
     }
   }, []);
 
+  const fetchDecisions = useCallback(async () => {
+    try {
+      const data = await decisionService.getDecisionStats();
+      if (data) setDecisionStats(data);
+    } catch (err) {
+      console.error('Error loading decision stats:', err);
+    } finally {
+      setDecStatsLoading(false);
+    }
+  }, []);
+
+  const fetchAlerts = useCallback(async () => {
+    try {
+      const data = await alertService.getAlerts({ limit: 6 });
+      if (data) setAlerts(data);
+    } catch (err) {
+      console.error('Error loading alerts queue:', err);
+    } finally {
+      setAlertsLoading(false);
+    }
+  }, []);
+
+  const fetchTransactions = useCallback(async () => {
+    try {
+      const data = await transactionService.getTransactions({ limit: 50 });
+      if (data) setTransactions(data);
+    } catch (err) {
+      console.error('Error loading live transactions:', err);
+    } finally {
+      setTxnsLoading(false);
+    }
+  }, []);
+
+  const fetchData = useCallback(async () => {
+    setRefreshing(true);
+    await Promise.allSettled([
+      fetchStats(),
+      fetchDecisions(),
+      fetchAlerts(),
+      fetchTransactions(),
+    ]);
+    setRefreshing(false);
+  }, [fetchStats, fetchDecisions, fetchAlerts, fetchTransactions]);
+
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    // Fire all widget requests concurrently without blocking the shell
+    fetchStats();
+    fetchDecisions();
+    fetchAlerts();
+    fetchTransactions();
+  }, [fetchStats, fetchDecisions, fetchAlerts, fetchTransactions]);
 
   // Real-Time Event Subscriptions (No Polling!)
   useEffect(() => {
@@ -97,8 +138,8 @@ export const OverviewPage: React.FC = () => {
         risk_level: data.risk_level ?? 'Low',
         decision: data.decision ?? 'ALLOW',
         user_id: data.user_id,
-        country: data.country,
-        currency: data.currency || 'USD',
+        country: data.country || 'IN',
+        currency: data.currency || 'INR',
         prediction: data.prediction,
       };
 
@@ -437,7 +478,7 @@ export const OverviewPage: React.FC = () => {
                       {tx.transaction_ref}
                     </td>
                     <td className="px-4 py-3 font-bold text-black dark:text-white">
-                      ${tx.amount.toFixed(2)}
+                      {formatINR(tx.amount)}
                     </td>
                     <td className="px-4 py-3 text-xs text-black/80 dark:text-white/80">
                       <div>{tx.merchant || 'Online Merchant'}</div>
@@ -455,7 +496,7 @@ export const OverviewPage: React.FC = () => {
                       <DecisionBadge decision={decision} size="sm" />
                     </td>
                     <td className="px-4 py-3 text-xs text-black/60 dark:text-white/60 font-mono">
-                      {new Date(tx.timestamp).toLocaleTimeString()}
+                      {formatISTTime(tx.timestamp)}
                     </td>
                     <td className="px-4 py-3 text-right">
                       <button
@@ -538,7 +579,7 @@ export const OverviewPage: React.FC = () => {
           isOpen={!!selectedTx}
           onClose={() => setSelectedTx(null)}
           title={`Transaction: ${selectedTx.transaction_ref}`}
-          subtitle={`Evaluated at ${new Date(selectedTx.timestamp).toLocaleString()}`}
+          subtitle={`Evaluated at ${formatIST(selectedTx.timestamp)}`}
           maxWidth="4xl"
         >
           <div className="space-y-6">
@@ -565,9 +606,9 @@ export const OverviewPage: React.FC = () => {
               <div className="bg-black/5 dark:bg-white/5 p-4 rounded-xl border border-black/10 dark:border-white/10 flex flex-col justify-center items-center text-center">
                 <span className="text-xs text-black/60 dark:text-white/60 uppercase font-semibold">Transaction Amount</span>
                 <span className="text-2xl font-black text-blue-600 dark:text-blue-400 mt-1">
-                  ${selectedTx.amount.toFixed(2)}
+                  {formatINR(selectedTx.amount)}
                 </span>
-                <span className="text-xs text-black/60 dark:text-white/60 font-mono mt-0.5">{selectedTx.currency || 'USD'}</span>
+                <span className="text-xs text-black/60 dark:text-white/60 font-mono mt-0.5">{selectedTx.currency || 'INR'}</span>
               </div>
             </div>
 
@@ -585,8 +626,8 @@ export const OverviewPage: React.FC = () => {
                     <span className="text-black dark:text-white font-medium">{selectedTx.category || 'N/A'}</span>
                   </div>
                   <div className="flex justify-between py-1 border-b border-black/10 dark:border-white/10">
-                    <span className="text-black/60 dark:text-white/60">Country</span>
-                    <span className="text-black dark:text-white font-medium">{selectedTx.country || 'US'}</span>
+                    <span className="text-black/60 dark:text-white/60">Country / State</span>
+                    <span className="text-black dark:text-white font-medium">{selectedTx.state ? `${selectedTx.state}, India` : (selectedTx.country || 'IN')}</span>
                   </div>
                   <div className="flex justify-between py-1">
                     <span className="text-black/60 dark:text-white/60">User ID</span>

@@ -112,10 +112,10 @@ class DecisionService:
         self,
         fraud_score: float,
         amount: float,
-        currency: str = "USD",
-        merchant: str = "Online Merchant",
+        currency: str = "INR",
+        merchant: str = "Reliance Digital",
         category: str = "General",
-        country: str = "US",
+        country: str = "IN",
         user_id: Optional[str] = None,
         transaction_ref: Optional[str] = None,
         device_fingerprint: Optional[str] = None,
@@ -145,13 +145,32 @@ class DecisionService:
         return outcome.to_dict()
 
     def get_decision_stats(self) -> DecisionStatsOut:
-        total = self.db.query(func.count(FraudPrediction.id)).scalar() or 0
-        allow = self.db.query(func.count(FraudPrediction.id)).filter(FraudPrediction.decision == DecisionType.ALLOW).scalar() or 0
-        challenge = self.db.query(func.count(FraudPrediction.id)).filter(FraudPrediction.decision == DecisionType.CHALLENGE).scalar() or 0
-        review = self.db.query(func.count(FraudPrediction.id)).filter(FraudPrediction.decision == DecisionType.REVIEW).scalar() or 0
-        block = self.db.query(func.count(FraudPrediction.id)).filter(FraudPrediction.decision == DecisionType.BLOCK).scalar() or 0
+        from app.core.config import settings
+        from app.core.redis import cache_get, cache_set
+        from sqlalchemy import case
 
-        return DecisionStatsOut(
+        cache_key = "stats:decisions"
+        cached = cache_get(cache_key)
+        if cached:
+            return DecisionStatsOut(**cached)
+
+        row = (
+            self.db.query(
+                func.count(FraudPrediction.id).label("total"),
+                func.sum(case((FraudPrediction.decision == DecisionType.ALLOW, 1), else_=0)).label("allow"),
+                func.sum(case((FraudPrediction.decision == DecisionType.CHALLENGE, 1), else_=0)).label("challenge"),
+                func.sum(case((FraudPrediction.decision == DecisionType.REVIEW, 1), else_=0)).label("review"),
+                func.sum(case((FraudPrediction.decision == DecisionType.BLOCK, 1), else_=0)).label("block"),
+            ).first()
+        )
+
+        total = row.total or 0 if row else 0
+        allow = int(row.allow or 0) if row else 0
+        challenge = int(row.challenge or 0) if row else 0
+        review = int(row.review or 0) if row else 0
+        block = int(row.block or 0) if row else 0
+
+        stats = DecisionStatsOut(
             total_decisions=total,
             allow_count=allow,
             challenge_count=challenge,
@@ -162,4 +181,6 @@ class DecisionService:
             review_percentage=round((review / total) * 100, 2) if total else 0.0,
             block_percentage=round((block / total) * 100, 2) if total else 0.0,
         )
+        cache_set(cache_key, stats.model_dump(), ttl_seconds=settings.redis_cache_ttl_stats)
+        return stats
 

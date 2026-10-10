@@ -8,7 +8,7 @@ import math
 from typing import List
 import uuid
 
-from fastapi import APIRouter, Depends, Path, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Path, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import (
@@ -53,9 +53,10 @@ def register(
 )
 def login(
     body: UserLogin,
+    background_tasks: BackgroundTasks,
     auth_svc: AuthService = Depends(get_auth_service),
 ) -> TokenResponse:
-    return auth_svc.login(body)
+    return auth_svc.login(body, background_tasks=background_tasks)
 
 
 @router.get(

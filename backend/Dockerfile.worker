@@ -1,0 +1,31 @@
+# ── Stage 1: Flink Worker Dependency Builder ─────────────────────────────────
+FROM python:3.11-slim AS builder
+
+WORKDIR /app
+
+RUN pip install --no-cache-dir --upgrade pip
+
+COPY requirements-worker.txt .
+RUN pip install --no-cache-dir --prefix=/install -r requirements-worker.txt
+
+# ── Stage 2: Minimal Worker Runtime ───────────────────────────────────────────
+FROM python:3.11-slim AS runtime
+
+WORKDIR /app
+
+# Copy pre-installed packages from builder stage
+COPY --from=builder /install /usr/local
+
+# Copy application source code
+COPY . .
+
+RUN mkdir -p /app/logs /app/app/ml/saved
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH=/app
+
+HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
+    CMD python -c "import sys; sys.exit(0)" || exit 1
+
+ENTRYPOINT ["python", "-m", "flink.run_job"]

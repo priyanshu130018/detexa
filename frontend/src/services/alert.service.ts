@@ -11,8 +11,11 @@ export interface AlertQueryParams {
 
 export const alertService = {
   async getAlerts(params?: AlertQueryParams): Promise<Alert[]> {
-    const response = await api.get<Alert[]>('/alerts', { params });
-    return response.data;
+    const response = await api.get<any>('/alerts', { params });
+    if (response.data && Array.isArray(response.data.items)) {
+      return response.data.items;
+    }
+    return Array.isArray(response.data) ? response.data : [];
   },
 
   async getAlertById(id: string): Promise<Alert> {

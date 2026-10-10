@@ -9,10 +9,10 @@ export const PredictPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'credit' | 'batch' | 'behavior'>('credit');
 
   // Single Credit Form State
-  const [amount, setAmount] = useState<number>(150.0);
-  const [merchant, setMerchant] = useState<string>('Amazon');
+  const [amount, setAmount] = useState<number>(4500.0);
+  const [merchant, setMerchant] = useState<string>('Reliance Digital');
   const [category, setCategory] = useState<string>('electronics');
-  const [country, setCountry] = useState<string>('US');
+  const [country, setCountry] = useState<string>('IN');
   const [vFeatures, setVFeatures] = useState<Record<string, number>>(() => {
     const init: Record<string, number> = {};
     for (let i = 1; i <= 28; i++) init[`v${i}`] = 0.0;
@@ -28,7 +28,7 @@ export const PredictPage: React.FC = () => {
 
   // Behavior Form State
   const [sessionId, setSessionId] = useState<string>(() => Math.random().toString(36).substring(2, 12));
-  const [ipAddress, setIpAddress] = useState<string>('192.168.1.45');
+  const [ipAddress, setIpAddress] = useState<string>('103.21.124.5');
   const [loginHour, setLoginHour] = useState<number>(14);
   const [typingSpeed, setTypingSpeed] = useState<number>(4.8);
   const [mouseVelocity, setMouseVelocity] = useState<number>(180);
@@ -50,15 +50,15 @@ export const PredictPage: React.FC = () => {
       else fraudV[`v${i}`] = Number(((Math.random() - 0.5) * 4).toFixed(3));
     }
     setVFeatures(fraudV);
-    setAmount(1250.0);
-    setMerchant('Electronics Depot Global');
+    setAmount(85000.0);
+    setMerchant('Reliance Digital Mumbai');
   };
 
   const handleResetVFeatures = () => {
     const zeroV: Record<string, number> = {};
     for (let i = 1; i <= 28; i++) zeroV[`v${i}`] = 0.0;
     setVFeatures(zeroV);
-    setAmount(150.0);
+    setAmount(4500.0);
   };
 
   const handleCreditSubmit = async (e: React.FormEvent) => {
@@ -217,7 +217,7 @@ export const PredictPage: React.FC = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-black/60 dark:text-white/60 uppercase tracking-wider mb-1.5">
-                    Amount ($)
+                    Amount (₹)
                   </label>
                   <input
                     type="number"
@@ -253,11 +253,12 @@ export const PredictPage: React.FC = () => {
                     className="w-full bg-white dark:bg-black border border-black/20 dark:border-white/20 rounded-xl px-3 py-2 text-sm text-black dark:text-white focus:outline-none focus:border-blue-600"
                   >
                     <option value="electronics">Electronics</option>
-                    <option value="travel">Travel</option>
-                    <option value="entertainment">Entertainment</option>
                     <option value="food">Food & Dining</option>
-                    <option value="clothing">Clothing</option>
-                    <option value="services">Services</option>
+                    <option value="grocery">Groceries</option>
+                    <option value="travel">Travel & Transport</option>
+                    <option value="entertainment">Entertainment</option>
+                    <option value="clothing">Clothing & Apparel</option>
+                    <option value="services">Utilities & Services</option>
                   </select>
                 </div>
 
@@ -270,13 +271,11 @@ export const PredictPage: React.FC = () => {
                     onChange={(e) => setCountry(e.target.value)}
                     className="w-full bg-white dark:bg-black border border-black/20 dark:border-white/20 rounded-xl px-3 py-2 text-sm text-black dark:text-white focus:outline-none focus:border-blue-600"
                   >
+                    <option value="IN">India (IN)</option>
                     <option value="US">United States (US)</option>
                     <option value="GB">United Kingdom (GB)</option>
-                    <option value="IN">India (IN)</option>
-                    <option value="DE">Germany (DE)</option>
-                    <option value="FR">France (FR)</option>
-                    <option value="CA">Canada (CA)</option>
                     <option value="SG">Singapore (SG)</option>
+                    <option value="AE">United Arab Emirates (AE)</option>
                   </select>
                 </div>
               </div>

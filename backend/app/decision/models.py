@@ -45,10 +45,10 @@ class DecisionContext:
     """
     fraud_score: float
     amount: float
-    currency: str = "USD"
-    merchant: str = "Online Merchant"
+    currency: str = "INR"
+    merchant: str = "Indian Merchant"
     category: str = "General"
-    country: str = "US"
+    country: str = "IN"
     user_id: Optional[str] = None
     transaction_ref: Optional[str] = None
     device_fingerprint: Optional[str] = None

@@ -241,7 +241,7 @@ class FlinkRealTimeStreamProcessor:
                 risk_level=risk_level.value,
                 decision=decision.value,
                 description=(
-                    f"Real-time {decision.value} alert on ${payload.amount:.2f} at {payload.merchant} "
+                    f"Real-time {decision.value} alert on ₹{payload.amount:,.2f} at {payload.merchant} "
                     f"[Score: {ml_fraud_score:.2f}, Velocity (1m): {agg_features.velocity_1m}]"
                 ),
                 reason_codes=reason_codes,
@@ -274,7 +274,7 @@ class FlinkRealTimeStreamProcessor:
                     "alert_type": "stream_fraud",
                     "risk_level": risk_level.value,
                     "score": round(ml_fraud_score, 4),
-                    "description": f"Real-time {decision.value} alert on ${payload.amount:.2f} at {payload.merchant}",
+                    "description": f"Real-time {decision.value} alert on ₹{payload.amount:,.2f} at {payload.merchant}",
                     "status": "open",
                     "created_at": datetime.now(timezone.utc).isoformat(),
                 })
@@ -433,7 +433,7 @@ class FlinkRealTimeStreamProcessor:
                     risk_level=risk_level,
                     score=round(fraud_score, 4),
                     description=(
-                        f"Real-time stream alert on ${payload.amount:.2f} at {merchant.name} "
+                        f"Real-time stream alert on ₹{payload.amount:,.2f} at {merchant.name} "
                         f"[Decision: {decision.value}, Triggers: {', '.join(reason_codes)}]"
                     ),
                     status=AlertStatus.OPEN,

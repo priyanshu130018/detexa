@@ -16,6 +16,7 @@ import { RiskBadge } from '../components/common/RiskBadge';
 import { DecisionBadge } from '../components/common/DecisionBadge';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
 import { EmptyState } from '../components/common/EmptyState';
+import { formatINR, formatIST, formatISTTime } from '../utils/formatters';
 
 export const TransactionsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -67,8 +68,9 @@ export const TransactionsPage: React.FC = () => {
         amount: Number(data.amount || 0),
         merchant: data.merchant,
         category: data.category,
-        country: data.country || 'US',
-        currency: data.currency || 'USD',
+        country: data.country || 'IN',
+        state: data.state || 'Maharashtra',
+        currency: data.currency || 'INR',
         fraud_score: Number(data.fraud_score || 0),
         risk_level: data.risk_level || 'Low',
         decision: data.decision || 'ALLOW',
@@ -308,7 +310,7 @@ export const TransactionsPage: React.FC = () => {
           </div>
           <div className="bg-black/5 dark:bg-white/5 p-2.5 rounded-xl border border-black/10 dark:border-white/10">
             <span className="text-[11px] text-black/60 dark:text-white/60 uppercase font-semibold">Avg Ticket</span>
-            <div className="text-lg font-bold text-black dark:text-white mt-0.5">${avgAmount.toFixed(2)}</div>
+            <div className="text-lg font-bold text-black dark:text-white mt-0.5">{formatINR(avgAmount)}</div>
           </div>
         </div>
       </div>
@@ -330,13 +332,13 @@ export const TransactionsPage: React.FC = () => {
               <thead className="text-[11px] uppercase tracking-wider bg-black/5 dark:bg-white/5 text-black/60 dark:text-white/60 border-b border-black/10 dark:border-white/10">
                 <tr>
                   <th className="px-4 py-3.5">Reference</th>
-                  <th className="px-4 py-3.5">Amount</th>
+                  <th className="px-4 py-3.5">Amount (INR)</th>
                   <th className="px-4 py-3.5">Merchant / Cat</th>
-                  <th className="px-4 py-3.5">Geo</th>
+                  <th className="px-4 py-3.5">State / Location</th>
                   <th className="px-4 py-3.5">Fraud Score</th>
                   <th className="px-4 py-3.5">Risk Tier</th>
                   <th className="px-4 py-3.5">Verdict</th>
-                  <th className="px-4 py-3.5">Timestamp</th>
+                  <th className="px-4 py-3.5">Time (IST)</th>
                   <th className="px-4 py-3.5 text-right">360° Inspector</th>
                 </tr>
               </thead>
@@ -361,14 +363,14 @@ export const TransactionsPage: React.FC = () => {
                         {t.transaction_ref}
                       </td>
                       <td className="px-4 py-3 font-bold text-black dark:text-white">
-                        ${t.amount.toFixed(2)}
+                        {formatINR(t.amount)}
                       </td>
                       <td className="px-4 py-3">
                         <div className="font-semibold text-black dark:text-white">{t.merchant || 'General Merchant'}</div>
                         <div className="text-[11px] text-black/60 dark:text-white/60">{t.category || 'eCommerce'}</div>
                       </td>
                       <td className="px-4 py-3 font-mono text-xs text-black/60 dark:text-white/60">
-                        {t.country || 'US'}
+                        {t.state ? `${t.state}, IN` : (t.country || 'IN')}
                       </td>
                       <td className="px-4 py-3 font-mono font-bold text-xs">
                         <span className={score >= 0.75 ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'}>
@@ -382,7 +384,7 @@ export const TransactionsPage: React.FC = () => {
                         <DecisionBadge decision={decision} size="sm" />
                       </td>
                       <td className="px-4 py-3 text-xs text-black/60 dark:text-white/60 whitespace-nowrap font-mono">
-                        {new Date(t.timestamp).toLocaleTimeString()}
+                        {formatISTTime(t.timestamp)}
                       </td>
                       <td className="px-4 py-3 text-right">
                         <span className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 dark:text-blue-400 group-hover:underline">

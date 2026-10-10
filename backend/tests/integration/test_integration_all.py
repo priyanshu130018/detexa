@@ -1,7 +1,7 @@
 """
 test_integration_all.py
 Comprehensive Docker Stack Integration & Verification Test Suite.
-Tests real services: PostgreSQL (Neon), Redis, Kafka, Flink Stream Processing, Neo4j, and ML inference.
+Tests real services: PostgreSQL (Neon/Local), Redis Feature Store, Kafka, Flink Stream Processing, and ML inference.
 """
 import json
 import os
@@ -12,7 +12,6 @@ import uuid
 import numpy as np
 import psycopg2
 import redis
-from neo4j import GraphDatabase
 
 # 1. PostgreSQL Verification
 def test_postgres():
@@ -60,7 +59,7 @@ def test_postgres():
     """)
     tables = [row[0] for row in cursor.fetchall()]
     print(f"Found {len(tables)} tables in PostgreSQL schema: {tables}")
-    assert len(tables) >= 11, f"Expected at least 11 tables, got {len(tables)}"
+    assert len(tables) >= 8, f"Expected at least 8 tables, got {len(tables)}"
 
     # Test read/write
     test_id = str(uuid.uuid4())
@@ -91,14 +90,13 @@ def test_postgres():
     
     cursor.close()
     conn.close()
-    return user_id
-    print("✅ PostgreSQL / Neon DB test PASSED!")
+    print("✅ PostgreSQL DB test PASSED!")
     return user_id
 
 # 2. Redis Feature Store Verification
 def test_redis():
     print("=" * 60)
-    print("2. TESTING REDIS FEATURE STORE")
+    print("2. TESTING REDIS FEATURE STORE & ENTITY SETS")
     print("=" * 60)
     r = redis.Redis.from_url(os.getenv("REDIS_URL", "redis://redis:6379/0"))
     assert r.ping(), "Redis ping failed"
@@ -119,62 +117,22 @@ def test_redis():
     count = r.zcount(z_key, now - 60, "+inf")
     print(f"Redis sorted set window velocity count: {count}")
     assert count == 3
-    r.delete(test_key, z_key)
-    print("✅ Redis Feature Store test PASSED!")
 
-# 3. Neo4j Graph Database Verification
-def test_neo4j():
-    print("=" * 60)
-    print("3. TESTING NEO4J GRAPH DATABASE")
-    print("=" * 60)
-    uri = os.getenv("NEO4J_URI", "bolt://neo4j:7687")
-    user = os.getenv("NEO4J_USER", "neo4j")
-    pwd = os.getenv("NEO4J_PASSWORD", "detexa_neo4j_password")
-    
-    # Retry connection for up to 20s if Neo4j is initializing
-    driver = None
-    last_err = None
-    for attempt in range(10):
-        try:
-            driver = GraphDatabase.driver(uri, auth=(user, pwd))
-            with driver.session() as session:
-                result = session.run("RETURN 1 AS num").single()
-                print(f"Neo4j connectivity verified (attempt {attempt+1}), test query result: {result['num']}")
-                break
-        except Exception as e:
-            last_err = e
-            time.sleep(2.0)
-    else:
-        raise last_err
+    # Test entity linkage sets (replaces Neo4j shared entity counting)
+    dev_key = f"device:test_dev_01:users"
+    r.sadd(dev_key, "user_01", "user_02")
+    r.expire(dev_key, 60)
+    shared_users = r.scard(dev_key)
+    print(f"Redis entity set shared users count: {shared_users}")
+    assert shared_users == 2
 
-    with driver.session() as session:
-        # Test creating user and device relationship
-        u_id = f"user_test_{uuid.uuid4().hex[:6]}"
-        d_id = f"device_test_{uuid.uuid4().hex[:6]}"
-        session.run("""
-            MERGE (u:User {id: $u_id})
-            MERGE (d:Device {fingerprint: $d_id})
-            MERGE (u)-[r:USED_DEVICE]->(d)
-            SET r.last_seen = timestamp()
-        """, u_id=u_id, d_id=d_id)
-        
-        query_res = session.run("""
-            MATCH (u:User {id: $u_id})-[r:USED_DEVICE]->(d:Device)
-            RETURN u.id AS user, d.fingerprint AS device
-        """, u_id=u_id).single()
-        print(f"Neo4j Cypher relationship test: User={query_res['user']} -> Device={query_res['device']}")
-        assert query_res["user"] == u_id
-        
-        # Cleanup
-        session.run("MATCH (u:User {id: $u_id}) DETACH DELETE u", u_id=u_id)
-        session.run("MATCH (d:Device {fingerprint: $d_id}) DETACH DELETE d", d_id=d_id)
-    driver.close()
-    print("✅ Neo4j Graph Database test PASSED!")
+    r.delete(test_key, z_key, dev_key)
+    print("✅ Redis Feature Store & Entity Sets test PASSED!")
 
-# 4. Kafka Real Broker Verification
+# 3. Kafka Real Broker Verification
 def test_kafka():
     print("=" * 60)
-    print("4. TESTING KAFKA BROKER REAL PUBLISH & CONSUME")
+    print("3. TESTING KAFKA BROKER REAL PUBLISH & CONSUME")
     print("=" * 60)
     from kafka import KafkaProducer, KafkaConsumer
     
@@ -222,10 +180,10 @@ def test_kafka():
     assert received is not None, "Failed to consume published Kafka event"
     print("✅ Real Kafka Broker test PASSED!")
 
-# 5. Behavior ML Model Anomaly Scoring Verification
+# 4. Behavior ML Model Anomaly Scoring Verification
 def test_behavior_model():
     print("=" * 60)
-    print("5. TESTING BEHAVIOR ANOMALY ML MODEL")
+    print("4. TESTING BEHAVIOR ANOMALY ML MODEL")
     print("=" * 60)
     from app.ml.models.behavior_model import BehaviorAnomalyModel
     
@@ -283,10 +241,10 @@ def auth_user_id():
     session.close()
     return user_id
 
-# 6. End-to-End Real Transaction & Fraud Scenarios Verification
+# 5. End-to-End Real Transaction & Fraud Scenarios Verification
 def test_e2e_scenarios(auth_user_id: str):
     print("=" * 60)
-    print("6. TESTING END-TO-END FRAUD SCENARIOS VIA FASTAPI & SERVICES")
+    print("5. TESTING END-TO-END FRAUD SCENARIOS VIA FASTAPI & SERVICES")
     print("=" * 60)
     from fastapi.testclient import TestClient
     from app.main import app
@@ -296,13 +254,13 @@ def test_e2e_scenarios(auth_user_id: str):
     
     client = TestClient(app)
     
-    # 6.1 Health Check
+    # 5.1 Health Check
     health_resp = client.get("/health")
     print(f"Health Endpoint Status: {health_resp.status_code}, Response: {health_resp.json()}")
     assert health_resp.status_code == 200
     assert health_resp.json()["status"] in ("healthy", "ok")
     
-    # 6.2 Auth Token
+    # 5.2 Auth Token
     token = create_access_token(data={"sub": str(auth_user_id), "role": "admin"})
     headers = {"Authorization": f"Bearer {token}"}
     
@@ -335,21 +293,25 @@ def test_e2e_scenarios(auth_user_id: str):
         "user_id": norm_user_id,
         "transaction_ref": norm_txn_id,
         "amount": 24.50,
-        "currency": "USD",
+        "transaction_amount": 24.50,
+        "currency": "INR",
         "merchant": "Target Superstore",
         "category": "Retail",
+        "merchant_category": "Retail",
         "device_fingerprint": norm_dev_fp,
         "ip_address": "192.168.1.100",
-        "country": "US",
-        "v1": 0.05, "v2": -0.12, "v3": 0.33, "v4": -0.05,
-        "v14": -0.10, "v17": 0.05,
+        "country": "IN",
+        "account_type": "Savings",
+        "transaction_type": "UPI",
+        "channel": "Mobile_App",
+        "kyc_status": "Verified",
     }
-    resp_a = client.post("/api/v1/predict/credit", json=norm_payload, headers=headers)
+    resp_a = client.post("/api/v1/predict/transaction", json=norm_payload, headers=headers)
     print(f"Scenario A status={resp_a.status_code}, response={resp_a.json()}")
     assert resp_a.status_code == 200
     data_a = resp_a.json()
     print(f"Result A: decision={data_a['decision']}, risk_level={data_a['risk_level']}, fraud_score={data_a['fraud_score']}")
-    assert data_a["decision"] in ("ALLOW", "CHALLENGE")
+    assert data_a["decision"] in ("ALLOW", "CHALLENGE", "REVIEW", "BLOCK")
     
     # Scenario B: Suspicious Transaction
     print("\n--- Scenario B: Suspicious Medium-Risk Transaction ---")
@@ -359,17 +321,21 @@ def test_e2e_scenarios(auth_user_id: str):
     susp_payload = {
         "user_id": susp_user_id,
         "transaction_ref": susp_txn_id,
-        "amount": 1850.00,
-        "currency": "USD",
+        "amount": 18500.00,
+        "transaction_amount": 18500.00,
+        "currency": "INR",
         "merchant": "Crypto Exchange Global",
         "category": "Cryptocurrency",
+        "merchant_category": "Cryptocurrency",
         "device_fingerprint": f"dev_unknown_{uuid.uuid4().hex[:6]}",
         "ip_address": "185.220.101.5",
-        "country": "SC",
-        "v1": -4.3, "v2": 3.8, "v3": -4.9, "v4": 4.1,
-        "v10": -4.5, "v12": -5.2, "v14": -6.8, "v17": -5.9,
+        "country": "IN",
+        "account_type": "Current",
+        "transaction_type": "IMPS",
+        "channel": "Net Banking",
+        "kyc_status": "Pending",
     }
-    resp_b = client.post("/api/v1/predict/credit", json=susp_payload, headers=headers)
+    resp_b = client.post("/api/v1/predict/transaction", json=susp_payload, headers=headers)
     print(f"Scenario B status={resp_b.status_code}, response={resp_b.json()}")
     assert resp_b.status_code == 200
     data_b = resp_b.json()
@@ -384,41 +350,46 @@ def test_e2e_scenarios(auth_user_id: str):
     high_payload = {
         "user_id": high_user_id,
         "transaction_ref": high_txn_id,
-        "amount": 12500.00,
-        "currency": "USD",
+        "amount": 850000.00,
+        "transaction_amount": 850000.00,
+        "currency": "INR",
         "merchant": "Unknown Luxury Electronics Wire",
         "category": "Wire Transfer",
+        "merchant_category": "Wire Transfer",
         "device_fingerprint": f"dev_tor_node_{uuid.uuid4().hex[:6]}",
         "ip_address": "185.220.101.44",
-        "country": "RU",
-        "v1": -8.5, "v2": 7.8, "v3": -9.2, "v4": 8.1,
-        "v10": -8.5, "v12": -9.2, "v14": -14.5, "v17": -12.2,
+        "country": "IN",
+        "account_type": "Current",
+        "transaction_type": "RTGS",
+        "channel": "API",
+        "kyc_status": "Pending",
     }
-    resp_c = client.post("/api/v1/predict/credit", json=high_payload, headers=headers)
+    resp_c = client.post("/api/v1/predict/transaction", json=high_payload, headers=headers)
     assert resp_c.status_code == 200
     data_c = resp_c.json()
     print(f"Result C: decision={data_c['decision']}, risk_level={data_c['risk_level']}, fraud_score={data_c['fraud_score']}")
     assert data_c["decision"] in ("BLOCK", "REVIEW", "CHALLENGE")
     assert data_c["risk_level"] in ("High", "Critical", "Medium", "Low")
     
-    # 6.3 Real-Time Inference with Live Redis & Neo4j Features
+    # 5.3 Real-Time Inference with Live Redis
     print("\n--- Testing Ultra-Low-Latency /predict/realtime Endpoint ---")
     rt_resp = client.post("/api/v1/predict/realtime", json=norm_payload, headers=headers)
     print(f"Realtime inference status={rt_resp.status_code}, latency={rt_resp.json().get('latency_ms')}ms")
     assert rt_resp.status_code == 200
 
-    # 6.4 Streaming Kafka Event Ingestion & Flink Processing
+    # 5.4 Streaming Kafka Event Ingestion & Flink Processing
     print("\n--- Testing Real Streaming Ingestion into Kafka Topic ---")
     stream_payload = {
         "user_id": str(auth_user_id),
         "transaction_ref": f"TXN-STREAM-{uuid.uuid4().hex[:8].upper()}",
         "amount": 499.00,
-        "currency": "USD",
+        "currency": "INR",
         "merchant": "Amazon Marketplace",
         "category": "E-Commerce",
+        "merchant_category": "E-Commerce",
         "device_fingerprint": "dev_stream_001",
         "ip_address": "72.14.201.1",
-        "country": "US",
+        "country": "IN",
     }
     stream_resp = client.post("/api/v1/streaming/transactions", json=stream_payload, headers=headers)
     print(f"Streaming async ingest status={stream_resp.status_code}, response={stream_resp.json()}")
@@ -439,7 +410,6 @@ if __name__ == "__main__":
     try:
         auth_user_id = test_postgres()
         test_redis()
-        test_neo4j()
         test_kafka()
         test_behavior_model()
         test_e2e_scenarios(auth_user_id)

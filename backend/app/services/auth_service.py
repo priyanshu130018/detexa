@@ -5,7 +5,7 @@ Authentication and user management business logic with audit logging and atomic 
 """
 
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import Any, List, Optional
 import uuid
 
 from fastapi import HTTPException, status
@@ -16,6 +16,8 @@ from app.core.security import hash_password, verify_password, create_access_toke
 from app.db.models import AuditLog, User
 from app.models.schemas import UserRegister, UserLogin, TokenResponse
 
+
+from app.core.redis import cache_set
 
 class AuthService:
     def __init__(self, db: Session):
@@ -30,6 +32,7 @@ class AuthService:
             )
 
         user_id = uuid.uuid4()
+        now_dt = datetime.now(timezone.utc)
         try:
             user = User(
                 id=user_id,
@@ -39,7 +42,7 @@ class AuthService:
                 hashed_password=hash_password(data.password),
                 is_active=True,
                 is_admin=is_admin,
-                created_at=datetime.now(timezone.utc),
+                created_at=now_dt,
             )
             self.db.add(user)
 
@@ -50,28 +53,74 @@ class AuthService:
                 entity_type="user",
                 entity_id=str(user_id),
                 details={"email": data.email.lower(), "is_admin": is_admin},
-                created_at=datetime.now(timezone.utc),
+                created_at=now_dt,
             )
             self.db.add(audit)
 
             self.db.commit()
-            self.db.refresh(user)
         except Exception as exc:
             self.db.rollback()
             logger.error(f"Failed to register user {data.email}: {exc}")
             raise HTTPException(status_code=500, detail="Database transaction failed during registration")
 
-        token = create_access_token({"sub": str(user.id), "email": user.email, "is_admin": user.is_admin})
-        return TokenResponse(
-            access_token=token,
-            user_id=str(user.id),
-            name=user.name,
-            email=user.email,
-            is_admin=user.is_admin,
+        # Cache in Redis immediately
+        cache_set(
+            f"auth:user:{user_id}",
+            {
+                "id": str(user_id),
+                "name": data.name,
+                "email": data.email.lower(),
+                "mobile": data.mobile,
+                "is_active": True,
+                "is_admin": is_admin,
+                "created_at": now_dt.isoformat(),
+            },
+            ttl_seconds=300,
         )
 
-    def login(self, data: UserLogin) -> TokenResponse:
-        user: Optional[User] = self.db.query(User).filter(User.email == data.email.lower()).first()
+        token = create_access_token({"sub": str(user_id), "email": data.email.lower(), "is_admin": is_admin})
+        return TokenResponse(
+            access_token=token,
+            user_id=str(user_id),
+            name=data.name,
+            email=data.email.lower(),
+            is_admin=is_admin,
+        )
+
+    def record_login_audit(self, user_id: uuid.UUID, email: str):
+        from app.db.session import SessionLocal
+        db = SessionLocal()
+        try:
+            u = db.query(User).filter(User.id == user_id).first()
+            if u:
+                u.last_login = datetime.now(timezone.utc)
+            audit = AuditLog(
+                id=uuid.uuid4(),
+                user_id=user_id,
+                action="USER_LOGGED_IN",
+                entity_type="user",
+                entity_id=str(user_id),
+                details={"email": email},
+                created_at=datetime.now(timezone.utc),
+            )
+            db.add(audit)
+            db.commit()
+        except Exception as exc:
+            db.rollback()
+            logger.warning(f"Could not record login timestamp/audit: {exc}")
+        finally:
+            db.close()
+
+    def login(self, data: UserLogin, background_tasks: Optional[Any] = None) -> TokenResponse:
+        try:
+            user: Optional[User] = self.db.query(User).filter(User.email == data.email.lower()).first()
+        except Exception as db_exc:
+            logger.error(f"Database lookup failed during login for {data.email}: {db_exc}")
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Database connection error. Unable to verify credentials at this time.",
+            )
+
         if not user or not verify_password(data.password, user.hashed_password):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -83,30 +132,56 @@ class AuthService:
                 detail="User account is deactivated. Contact an administrator.",
             )
 
-        try:
-            user.last_login = datetime.now(timezone.utc)
-            audit = AuditLog(
-                id=uuid.uuid4(),
-                user_id=user.id,
-                action="USER_LOGGED_IN",
-                entity_type="user",
-                entity_id=str(user.id),
-                details={"email": user.email},
-                created_at=datetime.now(timezone.utc),
-            )
-            self.db.add(audit)
-            self.db.commit()
-        except Exception as exc:
-            self.db.rollback()
-            logger.warning(f"Could not record login timestamp/audit: {exc}")
+        u_id = str(user.id)
+        u_name = user.name
+        u_email = user.email
+        u_mobile = user.mobile
+        u_admin = bool(user.is_admin)
+        u_active = bool(user.is_active)
+        u_created = user.created_at.isoformat() if user.created_at else datetime.now(timezone.utc).isoformat()
 
-        token = create_access_token({"sub": str(user.id), "email": user.email, "is_admin": user.is_admin})
+        # Cache authenticated user in Redis immediately to accelerate all subsequent requests
+        cache_set(
+            f"auth:user:{u_id}",
+            {
+                "id": u_id,
+                "name": u_name,
+                "email": u_email,
+                "mobile": u_mobile,
+                "is_active": u_active,
+                "is_admin": u_admin,
+                "created_at": u_created,
+            },
+            ttl_seconds=300,
+        )
+
+        if background_tasks is not None:
+            background_tasks.add_task(self.record_login_audit, user.id, u_email)
+        else:
+            try:
+                user.last_login = datetime.now(timezone.utc)
+                audit = AuditLog(
+                    id=uuid.uuid4(),
+                    user_id=user.id,
+                    action="USER_LOGGED_IN",
+                    entity_type="user",
+                    entity_id=u_id,
+                    details={"email": u_email},
+                    created_at=datetime.now(timezone.utc),
+                )
+                self.db.add(audit)
+                self.db.commit()
+            except Exception as exc:
+                self.db.rollback()
+                logger.warning(f"Could not record login timestamp/audit: {exc}")
+
+        token = create_access_token({"sub": u_id, "email": u_email, "is_admin": u_admin})
         return TokenResponse(
             access_token=token,
-            user_id=str(user.id),
-            name=user.name,
-            email=user.email,
-            is_admin=user.is_admin,
+            user_id=u_id,
+            name=u_name,
+            email=u_email,
+            is_admin=u_admin,
         )
 
     def list_users(self, limit: int = 50, skip: int = 0) -> List[User]:

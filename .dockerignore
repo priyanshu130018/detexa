@@ -1,53 +1,53 @@
 # Git
-.git
+.git/
 .gitignore
+.github/
 
-# Python
+# Python caches and virtual environments
 __pycache__/
 *.py[cod]
+*$py.class
 *.pyo
 *.pyd
 .Python
 .venv/
 venv/
 env/
+ENV/
 *.egg-info/
 dist/
 build/
 
-# Environment
+# Environment files and credentials
 .env
+.env.*
 *.env
+*.pem
+*.key
 
 # Logs
 logs/
 *.log
 
-# IDE
+# IDE & OS
 .vscode/
 .idea/
 *.swp
-
-# OS
 .DS_Store
 Thumbs.db
 
-# Streamlit
-.streamlit/
-
-# Jupyter
-*.ipynb
-
-# Node
-node_modules/
-
-# Test caches
+# Test & Coverage
 .pytest_cache/
 .mypy_cache/
+.coverage
+htmlcov/
 
-# Model artifacts (generated)
-ml/models/saved/
+# Node & Frontend
+node_modules/
+frontend/dist/
+frontend/.vite/
 
-# Datasets
+# Notebooks & Raw Training Data
+*.ipynb
 data/
 *.csv

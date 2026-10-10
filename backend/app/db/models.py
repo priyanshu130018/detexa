@@ -116,12 +116,12 @@ class User(Base):
     last_login = Column(DateTime(timezone=True), nullable=True)
 
     # Relationships
-    transactions = relationship("Transaction", back_populates="user", lazy="selectin")
-    devices = relationship("Device", back_populates="user", lazy="selectin")
-    alerts = relationship("FraudAlert", foreign_keys="FraudAlert.user_id", back_populates="user", lazy="selectin")
-    assigned_alerts = relationship("FraudAlert", foreign_keys="FraudAlert.assigned_to", back_populates="assignee", lazy="selectin")
-    behavior_logs = relationship("BehaviorLog", back_populates="user", lazy="selectin")
-    audit_logs = relationship("AuditLog", back_populates="user", lazy="selectin")
+    transactions = relationship("Transaction", back_populates="user")
+    devices = relationship("Device", back_populates="user")
+    alerts = relationship("FraudAlert", foreign_keys="FraudAlert.user_id", back_populates="user")
+    assigned_alerts = relationship("FraudAlert", foreign_keys="FraudAlert.assigned_to", back_populates="assignee")
+    behavior_logs = relationship("BehaviorLog", back_populates="user")
+    audit_logs = relationship("AuditLog", back_populates="user")
 
 
 # ── 2. Merchants Table ───────────────────────────────────────────────────────
@@ -135,7 +135,7 @@ class Merchant(Base):
     risk_score = Column(Float, nullable=False, default=0.0)
     created_at = Column(DateTime(timezone=True), nullable=False, default=_now)
 
-    transactions = relationship("Transaction", back_populates="merchant_rel", lazy="selectin")
+    transactions = relationship("Transaction", back_populates="merchant_rel")
 
 
 # ── 3. Devices Table ─────────────────────────────────────────────────────────
@@ -152,8 +152,8 @@ class Device(Base):
     last_seen_at = Column(DateTime(timezone=True), nullable=False, default=_now)
 
     user = relationship("User", back_populates="devices")
-    transactions = relationship("Transaction", back_populates="device", lazy="selectin")
-    behavior_logs = relationship("BehaviorLog", back_populates="device", lazy="selectin")
+    transactions = relationship("Transaction", back_populates="device")
+    behavior_logs = relationship("BehaviorLog", back_populates="device")
 
     __table_args__ = (
         UniqueConstraint("user_id", "device_fingerprint", name="uq_user_device_fingerprint"),
@@ -174,8 +174,8 @@ class IPAddress(Base):
     reputation_score = Column(Float, nullable=False, default=0.0)
     last_checked_at = Column(DateTime(timezone=True), nullable=False, default=_now)
 
-    transactions = relationship("Transaction", back_populates="ip_rel", lazy="selectin")
-    behavior_logs = relationship("BehaviorLog", back_populates="ip_rel", lazy="selectin")
+    transactions = relationship("Transaction", back_populates="ip_rel")
+    behavior_logs = relationship("BehaviorLog", back_populates="ip_rel")
 
 
 # ── 5. Transactions Table ────────────────────────────────────────────────────

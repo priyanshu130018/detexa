@@ -1,0 +1,64 @@
+{
+  "environment": {
+    "app_name": "Detexa",
+    "app_env": "development",
+    "app_version": "2.0.0",
+    "cors_origins": [
+      "http://localhost:5173",
+      "http://localhost:3000",
+      "http://127.0.0.1:5173",
+      "http://127.0.0.1:3000"
+    ],
+    "status": "PASS"
+  },
+  "database": {
+    "status": "PASS",
+    "engine": "Neon Serverless PostgreSQL (SSL)",
+    "database_name": "neondb",
+    "user": "neondb_owner",
+    "latency_ms": 4216.86,
+    "server_version": "PostgreSQL 18.6 (c021049) on aarch64-unknown-linux-gnu"
+  },
+  "redis": {
+    "status": "PASS",
+    "host": "redis://redis:6379/0",
+    "latency_ms": 43.76,
+    "read_write_verified": true,
+    "ttl_verified": true
+  },
+  "neo4j": {
+    "status": "PASS",
+    "uri": "bolt://neo4j:7687",
+    "database": "neo4j",
+    "latency_ms": 602.24,
+    "crud_verified": true
+  },
+  "kafka": {
+    "status": "PASS",
+    "brokers": "kafka:9092",
+    "latency_ms": 386.78,
+    "topics": [
+      "detexa.transactions.raw",
+      "detexa.dlq",
+      "detexa.transactions.scored",
+      "detexa.test.integration",
+      "__consumer_offsets"
+    ]
+  },
+  "xgboost_model": {
+    "status": "PASS",
+    "model_version": "2.0.0",
+    "booster_type": "<class 'xgboost.core.Booster'>",
+    "feature_count": 85
+  },
+  "treeshap": {
+    "status": "PASS",
+    "initialized": true,
+    "top_feature_count": 10
+  },
+  "groq_llm": {
+    "status": "BLOCKED (No Key Configured - Safe Fallback Active)",
+    "model": "openai/gpt-oss-20b",
+    "configured": false
+  }
+}

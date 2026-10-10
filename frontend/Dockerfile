@@ -1,13 +1,13 @@
-# ── Multi-stage Build for Detexa React + TypeScript Frontend ─────────────────
-FROM node:20-alpine
+# ── Stage 1: Frontend Build Environment ───────────────────────────────────────
+FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Install dependencies
-COPY package*.json ./
-RUN npm install
+# Install dependencies deterministically via lockfile
+COPY package.json package-lock.json ./
+RUN npm ci
 
-# Copy application code
+# Copy application source code
 COPY . .
 
 # Build Vite production bundle
@@ -16,7 +16,21 @@ ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
 
 RUN npm run build
 
-EXPOSE 5173
+# ── Stage 2: Minimal Production Web Server (Nginx Alpine) ─────────────────────
+FROM nginx:1.27-alpine AS runner
 
-# Serve production preview without Nginx
-CMD ["npm", "run", "preview", "--", "--host", "0.0.0.0", "--port", "5173"]
+# Remove default nginx static assets
+RUN rm -rf /usr/share/nginx/html/*
+
+# Copy compiled SPA bundle from builder
+COPY --from=builder /app/dist /usr/share/nginx/html
+
+# Copy custom Nginx configuration
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+EXPOSE 80
+
+HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=3 \
+    CMD wget -q --spider http://localhost:80/health || exit 1
+
+CMD ["nginx", "-g", "daemon off;"]

@@ -69,7 +69,7 @@ export const ModelStatisticsPage: React.FC = () => {
 
   // Grouped feature list
   const groups = schemaMeta?.groups || {
-    transaction: { count: 6, features: ['amount', 'amount_log1p', 'currency_usd_eq', 'hour_of_day', 'day_of_week', 'is_weekend'] },
+    transaction: { count: 6, features: ['amount', 'amount_log1p', 'currency_inr_eq', 'hour_of_day', 'day_of_week', 'is_weekend'] },
     temporal_cyclical: { count: 6, features: ['hour_sin', 'hour_cos', 'day_sin', 'day_cos', 'month_sin', 'month_cos'] },
     behavioral_client: { count: 11, features: ['is_vpn', 'is_tor', 'typing_speed_wpm', 'mouse_velocity', 'failed_logins_recent', 'device_trust_score', 'ip_reputation_score', 'geo_distance_km', 'impossible_speed_flag', 'user_agent_risk', 'session_duration_s'] },
     redis_realtime_hot: { count: 22, features: ['velocity_1m', 'velocity_5m', 'velocity_15m', 'velocity_1h', 'velocity_24h', 'amount_sum_1m', 'amount_sum_5m', 'amount_sum_15m', 'amount_sum_1h', 'amount_sum_24h', 'amount_avg_1h', 'amount_max_24h', 'amount_ratio_1h', 'failed_auth_count_5m', 'failed_auth_count_1h', 'distinct_merchants_24h', 'distinct_categories_24h', 'distinct_devices_24h', 'distinct_ips_24h', 'is_new_merchant', 'is_new_device', 'is_new_ip'] },

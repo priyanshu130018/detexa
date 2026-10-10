@@ -137,24 +137,39 @@ class AlertService:
         return alert
 
     def get_dashboard_stats(self) -> DashboardStats:
+        from sqlalchemy import case
         cache_key = "stats:dashboard"
         cached = cache_get(cache_key)
         if cached:
             cached["cached"] = True
             return DashboardStats(**cached)
 
-        # High-performance single-pass / indexed queries
-        total = self.db.query(func.count(Transaction.id)).scalar() or 0
-        fraud_count = self.db.query(func.count(Transaction.id)).filter(Transaction.is_fraud == True).scalar() or 0
+        txn_row = (
+            self.db.query(
+                func.count(Transaction.id).label("total"),
+                func.sum(case((Transaction.is_fraud == True, 1), else_=0)).label("fraud_count"),
+                func.sum(case((Transaction.risk_level == RiskLevel.HIGH, 1), else_=0)).label("high"),
+                func.sum(case((Transaction.risk_level == RiskLevel.MEDIUM, 1), else_=0)).label("medium"),
+                func.sum(case((Transaction.risk_level == RiskLevel.LOW, 1), else_=0)).label("low"),
+                func.avg(Transaction.fraud_score).label("avg_score"),
+            ).first()
+        )
 
-        high = self.db.query(func.count(Transaction.id)).filter(Transaction.risk_level == RiskLevel.HIGH).scalar() or 0
-        medium = self.db.query(func.count(Transaction.id)).filter(Transaction.risk_level == RiskLevel.MEDIUM).scalar() or 0
-        low = self.db.query(func.count(Transaction.id)).filter(Transaction.risk_level == RiskLevel.LOW).scalar() or 0
+        total = txn_row.total or 0 if txn_row else 0
+        fraud_count = int(txn_row.fraud_count or 0) if txn_row else 0
+        high = int(txn_row.high or 0) if txn_row else 0
+        medium = int(txn_row.medium or 0) if txn_row else 0
+        low = int(txn_row.low or 0) if txn_row else 0
+        avg_score = float(txn_row.avg_score or 0.0) if txn_row else 0.0
 
-        total_alerts = self.db.query(func.count(FraudAlert.id)).scalar() or 0
-        open_alerts = self.db.query(func.count(FraudAlert.id)).filter(FraudAlert.status == AlertStatus.OPEN).scalar() or 0
-
-        avg_score = self.db.query(func.avg(Transaction.fraud_score)).scalar() or 0.0
+        alert_row = (
+            self.db.query(
+                func.count(FraudAlert.id).label("total_alerts"),
+                func.sum(case((FraudAlert.status == AlertStatus.OPEN, 1), else_=0)).label("open_alerts"),
+            ).first()
+        )
+        total_alerts = alert_row.total_alerts or 0 if alert_row else 0
+        open_alerts = int(alert_row.open_alerts or 0) if alert_row else 0
 
         stats = DashboardStats(
             total_transactions=total,
@@ -165,7 +180,7 @@ class AlertService:
             low_risk_count=low,
             total_alerts=total_alerts,
             open_alerts=open_alerts,
-            avg_fraud_score=round(float(avg_score), 4),
+            avg_fraud_score=round(avg_score, 4),
             cached=False,
         )
 

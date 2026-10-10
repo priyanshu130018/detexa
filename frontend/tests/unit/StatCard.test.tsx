@@ -9,13 +9,13 @@ describe('StatCard Component', () => {
     render(
       <StatCard
         title="Total Processed"
-        value="$1,248,500"
+        value="₹12,48,500.00"
         subtitle="+12% from yesterday"
         icon={Shield}
       />
     );
     expect(screen.getByText('Total Processed')).toBeInTheDocument();
-    expect(screen.getByText('$1,248,500')).toBeInTheDocument();
+    expect(screen.getByText('₹12,48,500.00')).toBeInTheDocument();
     expect(screen.getByText('+12% from yesterday')).toBeInTheDocument();
   });
 });

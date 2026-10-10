@@ -1,0 +1,200 @@
+name: Detexa CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - dev
+      - develop
+  pull_request:
+    branches:
+      - main
+      - master
+      - dev
+      - develop
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── Job A: Backend Checks ──────────────────────────────────────────────────
+  backend-checks:
+    name: Backend Syntax, Imports & Unit Tests
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: "backend/requirements-dev.txt"
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Verify Python Imports
+        run: python tests/verify_imports.py
+
+      - name: Run Unit & API Test Suite
+        env:
+          DATABASE_URL: sqlite:///:memory:
+          SECRET_KEY: test_ci_secret_key_minimum_32_characters_long
+          APP_ENV: testing
+          REDIS_ENABLED: "false"
+          KAFKA_ENABLED: "false"
+        run: |
+          pytest tests/unit tests/api -v --tb=short
+
+  # ── Job B: Frontend Checks ─────────────────────────────────────────────────
+  frontend-checks:
+    name: Frontend Typecheck, Lint & Production Build
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: "frontend/package-lock.json"
+
+      - name: Install Node Dependencies
+        run: npm ci
+
+      - name: TypeScript Validation & Production Bundle Build
+        env:
+          VITE_API_BASE_URL: http://localhost:8000/api/v1
+        run: |
+          npm run build
+
+  # ── Job C: Docker Validation & Image Build ─────────────────────────────────
+  docker-validation:
+    name: Docker Compose Validation & Multi-Stage Image Builds
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Validate Docker Compose Configuration
+        run: docker compose config
+
+      - name: Build Backend Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: false
+          tags: detexa-backend:ci-test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build Flink Worker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile.worker
+          push: false
+          tags: detexa-flink-worker:ci-test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build Frontend Nginx Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: false
+          tags: detexa-frontend:ci-test
+          build-args: |
+            VITE_API_BASE_URL=http://localhost:8000/api/v1
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ── Job D: Integration Checks ──────────────────────────────────────────────
+  integration-checks:
+    name: Service Integration & Isolated Prediction Flow
+    needs: [backend-checks, frontend-checks, docker-validation]
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: detexa_test_db
+          POSTGRES_USER: detexa_test_user
+          POSTGRES_PASSWORD: detexa_test_pass
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: "backend/requirements-dev.txt"
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Run Database Migrations
+        env:
+          DATABASE_URL: postgresql://detexa_test_user:detexa_test_pass@localhost:5432/detexa_test_db
+        run: alembic upgrade head
+
+      - name: Run Integration Tests
+        env:
+          DATABASE_URL: postgresql://detexa_test_user:detexa_test_pass@localhost:5432/detexa_test_db
+          REDIS_URL: redis://localhost:6379/0
+          REDIS_ENABLED: "true"
+          SECRET_KEY: test_ci_integration_secret_key_minimum_32_chars
+          APP_ENV: testing
+        run: |
+          pytest tests/integration/test_db_integration.py tests/integration/test_redis_integration.py -v --tb=short

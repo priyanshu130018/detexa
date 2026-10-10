@@ -18,21 +18,31 @@ export const LoginPage: React.FC = () => {
       return;
     }
 
+    const t0 = performance.now();
     try {
       setError(null);
       setLoading(true);
       await login(email, password);
+      const apiDuration = performance.now() - t0;
+      console.log(`[Performance] Login API response time: ${apiDuration.toFixed(2)}ms`);
+
+      const tNav = performance.now();
       navigate('/dashboard');
+      const navDuration = performance.now() - tNav;
+      console.log(`[Performance] Frontend navigation time: ${navDuration.toFixed(2)}ms`);
     } catch (err: any) {
-      const msg = err.response?.data?.detail || 'Invalid credentials or connection error.';
+      const msg =
+        err.response?.data?.detail ||
+        (err.code === 'ERR_NETWORK' || !err.response
+          ? 'Cannot connect to backend server. Please verify the API is running at http://localhost:8000.'
+          : 'Invalid credentials. Please verify your email and password.');
       setError(msg);
-    } finally {
       setLoading(false);
     }
   };
 
   const handleDemoFill = () => {
-    setEmail('admin@detexa.io');
+    setEmail('priyanshu@gmail.com');
     setPassword('Admin@1234');
     setError(null);
   };
@@ -71,7 +81,7 @@ export const LoginPage: React.FC = () => {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="analyst@detexa.io"
+                  placeholder="priyanshu@gmail.com"
                   className="w-full bg-black/5 dark:bg-white/5 border border-black/15 dark:border-white/15 rounded-xl pl-10 pr-4 py-2.5 text-sm text-black dark:text-white placeholder-black/30 dark:placeholder-white/30 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
                   required
                 />

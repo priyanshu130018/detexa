@@ -1,0 +1,42 @@
+# Git
+.git/
+.gitignore
+
+# Python caches & virtualenvs
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+
+# Secrets & Environment
+.env
+.env.*
+*.env
+*.pem
+*.key
+
+# Logs
+logs/
+*.log
+
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Test caches & coverage
+.pytest_cache/
+.coverage
+htmlcov/
+tests/
+
+# Notebooks
+*.ipynb

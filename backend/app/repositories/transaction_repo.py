@@ -61,14 +61,43 @@ class TransactionRepository(BaseRepository[Transaction]):
         min_amount: Optional[float] = None,
         max_amount: Optional[float] = None,
     ) -> Tuple[List[Transaction], int]:
-        q = self.db.query(Transaction).options(
-            joinedload(Transaction.merchant_rel),
-            joinedload(Transaction.user),
-            joinedload(Transaction.device),
-            joinedload(Transaction.ip_rel),
-            joinedload(Transaction.prediction),
-            joinedload(Transaction.alert),
-        )
+        base_q = self.db.query(Transaction.id)
+
+        if is_fraud is not None:
+            base_q = base_q.filter(Transaction.is_fraud == is_fraud)
+        if risk_level:
+            base_q = base_q.filter(Transaction.risk_level == risk_level)
+        if user_id:
+            base_q = base_q.filter(Transaction.user_id == user_id)
+        if merchant_id:
+            base_q = base_q.filter(Transaction.merchant_id == merchant_id)
+        if start_date:
+            base_q = base_q.filter(Transaction.timestamp >= start_date)
+        if end_date:
+            base_q = base_q.filter(Transaction.timestamp <= end_date)
+        if min_amount is not None:
+            base_q = base_q.filter(Transaction.amount >= min_amount)
+        if max_amount is not None:
+            base_q = base_q.filter(Transaction.amount <= max_amount)
+
+        if search:
+            pattern = f"%{search}%"
+            base_q = (
+                base_q.outerjoin(Transaction.merchant_rel)
+                .outerjoin(Transaction.user)
+                .filter(
+                    (Transaction.merchant.ilike(pattern))
+                    | (Merchant.name.ilike(pattern))
+                    | (Transaction.transaction_ref.ilike(pattern))
+                    | (Transaction.category.ilike(pattern))
+                    | (User.name.ilike(pattern))
+                    | (User.email.ilike(pattern))
+                )
+            )
+
+        total = base_q.count()
+
+        q = self.db.query(Transaction)
 
         if is_fraud is not None:
             q = q.filter(Transaction.is_fraud == is_fraud)
@@ -102,19 +131,32 @@ class TransactionRepository(BaseRepository[Transaction]):
                 )
             )
 
-        total = q.count()
         items = q.order_by(Transaction.timestamp.desc()).offset(skip).limit(limit).all()
         return items, total
 
     def get_summary_stats(self) -> Dict[str, Any]:
-        total = self.db.query(func.count(Transaction.id)).scalar() or 0
-        fraud_count = self.db.query(func.count(Transaction.id)).filter(Transaction.is_fraud == True).scalar() or 0
-        high = self.db.query(func.count(Transaction.id)).filter(Transaction.risk_level == RiskLevel.HIGH).scalar() or 0
-        medium = self.db.query(func.count(Transaction.id)).filter(Transaction.risk_level == RiskLevel.MEDIUM).scalar() or 0
-        low = self.db.query(func.count(Transaction.id)).filter(Transaction.risk_level == RiskLevel.LOW).scalar() or 0
-        avg_score = self.db.query(func.avg(Transaction.fraud_score)).scalar() or 0.0
-        total_volume = self.db.query(func.sum(Transaction.amount)).scalar() or 0.0
-        fraud_volume = self.db.query(func.sum(Transaction.amount)).filter(Transaction.is_fraud == True).scalar() or 0.0
+        from sqlalchemy import case
+        row = (
+            self.db.query(
+                func.count(Transaction.id).label("total"),
+                func.sum(case((Transaction.is_fraud == True, 1), else_=0)).label("fraud_count"),
+                func.sum(case((Transaction.risk_level == RiskLevel.HIGH, 1), else_=0)).label("high"),
+                func.sum(case((Transaction.risk_level == RiskLevel.MEDIUM, 1), else_=0)).label("medium"),
+                func.sum(case((Transaction.risk_level == RiskLevel.LOW, 1), else_=0)).label("low"),
+                func.avg(Transaction.fraud_score).label("avg_score"),
+                func.sum(Transaction.amount).label("total_volume"),
+                func.sum(case((Transaction.is_fraud == True, Transaction.amount), else_=0.0)).label("fraud_volume"),
+            ).first()
+        )
+
+        total = row.total or 0 if row else 0
+        fraud_count = int(row.fraud_count or 0) if row else 0
+        high = int(row.high or 0) if row else 0
+        medium = int(row.medium or 0) if row else 0
+        low = int(row.low or 0) if row else 0
+        avg_score = float(row.avg_score or 0.0) if row else 0.0
+        total_volume = float(row.total_volume or 0.0) if row else 0.0
+        fraud_volume = float(row.fraud_volume or 0.0) if row else 0.0
 
         return {
             "total_transactions": total,
@@ -123,7 +165,7 @@ class TransactionRepository(BaseRepository[Transaction]):
             "high_risk_count": high,
             "medium_risk_count": medium,
             "low_risk_count": low,
-            "avg_fraud_score": round(float(avg_score), 4),
-            "total_volume": round(float(total_volume), 2),
-            "fraud_volume": round(float(fraud_volume), 2),
+            "avg_fraud_score": round(avg_score, 4),
+            "total_volume": round(total_volume, 2),
+            "fraud_volume": round(fraud_volume, 2),
         }

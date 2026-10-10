@@ -1,0 +1,13 @@
+# ── Base Runtime Dependencies ────────────────────────────────────────────────
+-r requirements.txt
+
+# ── Testing Framework & Coverage ─────────────────────────────────────────────
+pytest==8.2.0
+pytest-asyncio>=0.23.0
+pytest-cov>=5.0.0
+
+# ── Test Data Generation ─────────────────────────────────────────────────────
+faker==24.11.0
+
+# ── Model Training & Resampling (Offline Development) ────────────────────────
+imbalanced-learn==0.12.2

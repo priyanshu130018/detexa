@@ -1,0 +1,22 @@
+# Node & Build artifacts
+node_modules/
+dist/
+.vite/
+
+# Git & IDE
+.git/
+.gitignore
+.vscode/
+.idea/
+.DS_Store
+
+# Secrets & Environment
+.env
+.env.*
+*.env
+
+# Logs & Tests
+*.log
+coverage/
+.nyc_output/
+tests/

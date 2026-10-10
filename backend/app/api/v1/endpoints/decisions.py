@@ -120,11 +120,11 @@ def override_decision(
 )
 def evaluate_decision_context(
     fraud_score: float = Query(0.05, ge=0.0, le=1.0),
-    amount: float = Query(100.0, ge=0.0),
-    currency: str = Query("USD"),
-    merchant: str = Query("Online Merchant"),
-    category: str = Query("General"),
-    country: str = Query("US"),
+    amount: float = Query(2500.0, ge=0.0),
+    currency: str = Query("INR"),
+    merchant: str = Query("Reliance Digital"),
+    category: str = Query("Electronics"),
+    country: str = Query("IN"),
     user_id: Optional[str] = Query(None),
     device_fingerprint: Optional[str] = Query(None),
     ip_address: Optional[str] = Query(None),

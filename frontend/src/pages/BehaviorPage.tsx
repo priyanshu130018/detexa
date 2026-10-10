@@ -190,7 +190,7 @@ export const BehaviorPage: React.FC = () => {
                 {logs.map((l) => (
                   <tr key={l.id} className="hover:bg-black/5 dark:hover:bg-white/5 transition">
                     <td className="px-4 py-3 font-mono text-blue-600 dark:text-blue-400">{l.session_id}</td>
-                    <td className="px-4 py-3 font-medium text-black dark:text-white">{l.geo_city ? `${l.geo_city}, ${l.geo_country}` : l.geo_country || 'US'}</td>
+                    <td className="px-4 py-3 font-medium text-black dark:text-white">{l.geo_city ? `${l.geo_city}, ${l.geo_country}` : l.geo_country || 'IN'}</td>
                     <td className="px-4 py-3 font-mono text-black/60 dark:text-white/60">{l.ip_address || '—'}</td>
                     <td className="px-4 py-3 text-black/80 dark:text-white/80">{l.login_hour !== undefined ? `${l.login_hour}:00` : '—'}</td>
                     <td className="px-4 py-3 space-x-1">

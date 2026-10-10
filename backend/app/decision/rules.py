@@ -119,11 +119,11 @@ class AmountSpikeRule(BaseDecisionRule):
                 triggered=True,
                 severity=RuleSeverity.WARNING,
                 action=DecisionAction.REVIEW,
-                reason_code=f"HARD_AMOUNT_LIMIT_EXCEEDED_${ctx.amount:.0f}",
-                message=f"High-value transaction (${ctx.amount:.2f}) exceeds policy ceiling (${settings.rule_max_amount_hard_limit:.0f}).",
+                reason_code=f"HARD_AMOUNT_LIMIT_EXCEEDED_{ctx.amount:.0f}",
+                message=f"High-value transaction (₹{ctx.amount:,.2f}) exceeds policy ceiling (₹{settings.rule_max_amount_hard_limit:,.0f}).",
                 metadata={"amount": ctx.amount, "threshold": settings.rule_max_amount_hard_limit},
             )
-        elif deviation >= settings.rule_max_amount_deviation and ctx.amount > 300.0:
+        elif deviation >= settings.rule_max_amount_deviation and ctx.amount > 10000.0:
             return RuleEvaluationResult(
                 rule_id=self.rule_id,
                 rule_name=self.rule_name,
@@ -159,7 +159,7 @@ class DeviceTrustRule(BaseDecisionRule):
                 message=f"Suspicious rapid hardware switching ({distinct_devs} devices in 15m).",
                 metadata={"distinct_devices_15m": distinct_devs},
             )
-        elif dev_changed and settings.rule_enable_device_change_challenge and ctx.amount > 150.0:
+        elif dev_changed and settings.rule_enable_device_change_challenge and ctx.amount > 1000.0:
             return RuleEvaluationResult(
                 rule_id=self.rule_id,
                 rule_name=self.rule_name,
@@ -195,7 +195,7 @@ class IPHoppingRule(BaseDecisionRule):
                 message=f"Multiple IP addresses detected ({distinct_ips} in 15m).",
                 metadata={"distinct_ips_15m": distinct_ips},
             )
-        elif ip_changed and settings.rule_enable_ip_hopping_challenge and ctx.amount > 200.0:
+        elif ip_changed and settings.rule_enable_ip_hopping_challenge and ctx.amount > 1000.0:
             return RuleEvaluationResult(
                 rule_id=self.rule_id,
                 rule_name=self.rule_name,
@@ -265,7 +265,7 @@ class DiurnalTimingRule(BaseDecisionRule):
                 severity=RuleSeverity.INFO,
                 action=DecisionAction.CHALLENGE,
                 reason_code=f"OFF_PEAK_NIGHT_TRANSACTION_{hour:.1f}H",
-                message=f"High-value transaction (${ctx.amount:.2f}) executed during off-peak hours ({hour:.1f}h UTC).",
+                message=f"High-value transaction (₹{ctx.amount:,.2f}) executed during off-peak hours ({hour:.1f}h UTC).",
                 metadata={"hour": hour, "amount": ctx.amount},
             )
         return None

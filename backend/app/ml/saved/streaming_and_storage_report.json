@@ -1,0 +1,48 @@
+{
+  "kafka": {
+    "status": "PASS",
+    "topic": "detexa.transactions.raw",
+    "partition": 0,
+    "offset": 10055,
+    "ack_latency_ms": 189.54,
+    "guarantee": "At-Least-Once (acks=all with idempotency keys)"
+  },
+  "flink": {
+    "status": "PASS",
+    "slots_total": 4,
+    "slots_available": 4,
+    "jobs_running": 0,
+    "flink_version": "1.18.1"
+  },
+  "redis": {
+    "status": "PASS",
+    "50_pipelined_writes_ms": 1.84,
+    "read_success_rate": 1.0,
+    "cache_invalidation_verified": true
+  },
+  "neo4j": {
+    "status": "PASS",
+    "topology_node_counts": {
+      "Transaction": 73,
+      "User": 71,
+      "Device": 40,
+      "Merchant": 11,
+      "IPAddress": 6
+    },
+    "graph_risk_features_resolved": {
+      "user_id": "usr_admin_001",
+      "device_fingerprint": null,
+      "ip_address": null,
+      "shared_device_user_count": 1,
+      "shared_ip_user_count": 2,
+      "shared_device_fraud_count": 0,
+      "shared_ip_fraud_count": 0,
+      "associated_merchant_count": 1,
+      "fraud_ring_size": 2,
+      "suspicious_neighbors_count": 0,
+      "is_device_shared": false,
+      "is_ip_shared": true,
+      "graph_risk_score": 0.0
+    }
+  }
+}

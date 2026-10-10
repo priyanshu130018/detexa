@@ -160,7 +160,7 @@ def register_exception_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(SQLAlchemyError)
     async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
-        logger.error(f"Unhandled database error on {request.url.path}: {exc}", exc_info=True)
+        logger.error("Unhandled database error on {path}: {err}", path=request.url.path, err=str(exc))
         payload = ErrorResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             error_code="DATABASE_ERROR",
@@ -171,7 +171,7 @@ def register_exception_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(Exception)
     async def unhandled_exception_handler(request: Request, exc: Exception):
-        logger.error(f"Unhandled internal server error on {request.url.path}: {exc}", exc_info=True)
+        logger.error("Unhandled internal server error on {path}: {err}", path=request.url.path, err=str(exc))
         payload = ErrorResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             error_code="INTERNAL_SERVER_ERROR",

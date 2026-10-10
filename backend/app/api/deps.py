@@ -74,6 +74,20 @@ def get_current_user(
     if cached_user_data and isinstance(cached_user_data, dict):
         if not cached_user_data.get("is_active", True):
             raise AuthorizationError("User account has been deactivated")
+        created_val = cached_user_data.get("created_at")
+        if isinstance(created_val, str):
+            try:
+                from datetime import datetime, timezone
+                created_dt = datetime.fromisoformat(created_val)
+            except Exception:
+                from datetime import datetime, timezone
+                created_dt = datetime.now(timezone.utc)
+        elif isinstance(created_val, datetime):
+            created_dt = created_val
+        else:
+            from datetime import datetime, timezone
+            created_dt = datetime.now(timezone.utc)
+
         return User(
             id=uuid.UUID(cached_user_data["id"]),
             name=cached_user_data.get("name", "Detexa User"),
@@ -81,6 +95,7 @@ def get_current_user(
             mobile=cached_user_data.get("mobile"),
             is_active=bool(cached_user_data.get("is_active", True)),
             is_admin=bool(cached_user_data.get("is_admin", False)),
+            created_at=created_dt,
         )
 
     # 2. Slow-Path: Query PostgreSQL on cache miss
@@ -92,7 +107,7 @@ def get_current_user(
     if not user.is_active:
         raise AuthorizationError("User account has been deactivated")
 
-    # Populate Redis cache with 60-second TTL
+    # Populate Redis cache with 300-second TTL
     cache_set(
         cache_key,
         {
@@ -102,8 +117,9 @@ def get_current_user(
             "mobile": user.mobile,
             "is_active": user.is_active,
             "is_admin": user.is_admin,
+            "created_at": user.created_at.isoformat() if user.created_at else None,
         },
-        ttl_seconds=60,
+        ttl_seconds=300,
     )
 
     return user

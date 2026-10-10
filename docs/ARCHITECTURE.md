@@ -88,16 +88,13 @@ Detexa utilizes a modern **event-driven, lambda-inspired microservices architect
   - `user:{user_id}:devices:24h`: Redis HyperLogLog / Set of distinct hardware fingerprints seen in 24 hours.
 - **Why it exists:** Relational databases are too slow for real-time aggregation queries during transactional checkout paths; Redis delivers instant in-memory lookups.
 
-### 2.5 Neo4j (Graph Relationship Database)
-- **Technology:** Neo4j Community Edition with Cypher Query Language.
-- **Purpose:** Entity resolution, multi-hop link analysis, and fraud syndicate detection.
-- **Graph Schema:**
-  - **Nodes:** `(:User)`, `(:Device)`, `(:IP)`, `(:Merchant)`, `(:Transaction)`.
-  - **Relationships:** `[:USES_DEVICE]`, `[:USES_IP]`, `[:TRANSACTED_WITH]`, `[:EXECUTED]`.
-- **Key Graph Risk Queries:**
-  - Finding shared hardware across distinct users: `MATCH (u1:User)-[:USES_DEVICE]->(d:Device)<-[:USES_DEVICE]-(u2:User) WHERE u1 <> u2 RETURN count(u2)`
-  - Fraud ring size calculation: Identifying clusters of accounts linked to confirmed fraud transactions.
-- **Why it exists:** Relational tables require expensive recursive multi-table JOINs to detect complex collusion patterns; graph databases resolve multi-hop links in single-digit milliseconds.
+### 2.5 Entity Resolution & Link Analysis (Redis Sets & PostgreSQL)
+- **Technology:** Redis In-Memory Sets (`device:{fp}:users`, `ip:{address}:users`) and PostgreSQL Relational Linkage (`devices`, `ip_addresses`, `transactions`).
+- **Purpose:** Sub-millisecond entity resolution, multi-account device sharing, and collusion ring detection without heavy graph database overhead.
+- **Architectural Audit Finding:** As documented in [`docs/NEO4J_AUDIT.md`](file:///c:/Users/13ver/Desktop/New%20folder/project/Detexa/docs/NEO4J_AUDIT.md), Neo4j Community Edition introduced 1.2 GB RAM overhead and 5–20 ms Bolt query latency while performing degree-counting queries that are identical to Redis Set cardinalities (`SCARD`) and PostgreSQL indexed queries.
+- **Streamlined Entity Resolution:**
+  - **Device Sharing:** Redis `SADD device:{device_fp}:users {user_id}` allows $O(1)$ $<0.2\text{ ms}$ evaluation of shared hardware collusion rings.
+  - **Relational Integrity:** PostgreSQL indexed foreign keys join `transactions` $\rightarrow$ `devices` $\rightarrow$ `users` for deep historical audits without dual-write consistency failure modes.
 
 ### 2.6 Machine Learning Models & Inference Pipeline
 - **Credit Fraud Model (XGBoost):**

@@ -1,0 +1,24 @@
+# ── Event Streaming & Broker Client ──────────────────────────────────────────
+kafka-python==2.0.2
+
+# ── Relational Database Sink ─────────────────────────────────────────────────
+sqlalchemy==2.0.30
+psycopg2-binary==2.9.9
+
+# ── Data Validation & Settings ───────────────────────────────────────────────
+pydantic==2.7.1
+pydantic-settings==2.2.1
+
+# ── Numerical Processing & Tabular Data ──────────────────────────────────────
+numpy==1.26.4
+pandas==2.2.2
+scipy==1.13.0
+joblib==1.4.2
+
+# ── Real-Time ML Inference (XGBoost Streaming Scoring) ──────────────────────
+scikit-learn==1.7.2
+xgboost==2.0.3
+
+# ── Logging & Utilities ──────────────────────────────────────────────────────
+python-dotenv==1.0.1
+loguru==0.7.2
